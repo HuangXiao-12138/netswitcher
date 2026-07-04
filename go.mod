@@ -1,12 +1,13 @@
 module github.com/netswitcher/netswitcher
 
-go 1.22
+go 1.23.0
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9
+	github.com/kardianos/service v1.2.4
 	github.com/spf13/cobra v1.8.1
 	github.com/wailsapp/wails/v2 v2.9.2
-	golang.org/x/sys v0.20.0
+	golang.org/x/sys v0.34.0
 	golang.org/x/text v0.15.0
 )
 
