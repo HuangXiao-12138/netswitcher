@@ -1,0 +1,15 @@
+{
+  "fixed": {
+    "file_version": "0.1.0.0"
+  },
+  "info": {
+    "0000": {
+      "ProductVersion": "0.1.0.0",
+      "CompanyName": "NetSwitcher",
+      "FileDescription": "NetSwitcher — 内外网路由管理工具",
+      "LegalCopyright": "Copyright (c) 2026 NetSwitcher",
+      "ProductName": "NetSwitcher",
+      "Comments": "Automatic split-routing for dual-NIC Windows machines."
+    }
+  }
+}

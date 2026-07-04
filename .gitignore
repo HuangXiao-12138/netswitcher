@@ -1,7 +1,7 @@
-build/
+build/bin/
+dist/
 frontend/dist/
 frontend/node_modules/
-frontend/wailsjs/
 *.exe
 *.exe~
 *.dll
