@@ -7,6 +7,7 @@ import (
 	"embed"
 	"log/slog"
 
+	"github.com/netswitcher/netswitcher/appapi"
 	"github.com/netswitcher/netswitcher/internal/paths"
 
 	"github.com/wailsapp/wails/v2"
@@ -30,10 +31,8 @@ func Run(opts Options) error {
 		opts.Height = 700
 	}
 
-	bindings := opts.Bindings
-	if len(bindings) == 0 {
-		bindings = []any{&noopAPI{}}
-	}
+	api := appapi.New()
+	bindings := append([]any{api}, opts.Bindings...)
 
 	err := wails.Run(&options.App{
 		Title:     opts.Title,
@@ -47,15 +46,10 @@ func Run(opts Options) error {
 		OnStartup: func(ctx context.Context) {
 			dir, _ := paths.ProgramDataDir()
 			slog.Info("GUI starting", "programdata", dir)
+			api.OnStartup(ctx) // wire event context
 		},
 		Bind:    bindings,
 		Windows: &windows.Options{},
 	})
 	return err
 }
-
-// noopAPI is a placeholder bound to the frontend so `wails build` succeeds in
-// Phase 0. Phase 6 replaces it with the real IPC-backed API.
-type noopAPI struct{}
-
-func (a *noopAPI) Ping() string { return "pong" }

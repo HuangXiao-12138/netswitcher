@@ -1,4 +1,11 @@
-// Svelte config. With @sveltejs/vite-plugin-svelte v3 and Svelte 4, TypeScript
-// preprocessing is handled by the Vite plugin itself; no svelte-preprocess
-// dependency is needed.
-export default {};
+import preprocess from "svelte-preprocess";
+
+// Svelte 4 + vite-plugin-svelte: TypeScript in <script lang="ts"> is handled
+// by svelte-preprocess (esbuild-based type stripping).
+export default {
+  preprocess: [
+    preprocess({
+      typescript: true,
+    }),
+  ],
+};

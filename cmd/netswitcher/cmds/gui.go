@@ -15,7 +15,7 @@ func newGUICmd() *cobra.Command {
 		Use:   "gui",
 		Short: "启动桌面 GUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			infof("[phase0] launching GUI")
+			infof("NetSwitcher GUI 启动")
 			err := gui.Run(gui.Options{Title: "NetSwitcher", Width: 1024, Height: 700})
 			if err == nil {
 				return nil

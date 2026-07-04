@@ -1,15 +1,106 @@
-/* Minimal global reset for the Phase 0 shell. Phase 6 introduces the full
-   design tokens (--color-surface etc.) per the GUI spec. */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
+/* NetSwitcher design tokens. Dark "network console" aesthetic — deliberate
+   accent, no template look. */
+:root {
+  --bg-0: #0c0e13;
+  --bg-1: #131720;
+  --bg-2: #1a1f2b;
+  --bg-3: #232a39;
+  --border: #2a3142;
+  --border-soft: #1f2533;
+  --text: #e6e8ee;
+  --text-dim: #9aa3b5;
+  --text-faint: #6b7388;
+  --accent: #5fb8ff;
+  --accent-dim: #2f7ec0;
+  --good: #4ade80;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --vpn: #c084fc;
+
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+
+  --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+  --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
-html,
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
 body {
-  margin: 0;
-  padding: 0;
+  background: var(--bg-0);
+  color: var(--text);
+  font-family: var(--font-ui);
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
 }
+#app { height: 100vh; display: flex; flex-direction: column; }
+
 button {
   font-family: inherit;
+  font-size: 13px;
+  background: var(--bg-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background 120ms, border-color 120ms;
 }
+button:hover { background: var(--bg-3); border-color: var(--accent-dim); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary { background: var(--accent-dim); border-color: var(--accent); color: #061018; font-weight: 600; }
+button.primary:hover { background: var(--accent); }
+button.danger { border-color: #5a2a30; }
+button.danger:hover { background: #3a1c22; }
+button.ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
+button.ghost:hover { background: var(--bg-2); color: var(--text); }
+
+input, select {
+  font-family: inherit;
+  font-size: 13px;
+  background: var(--bg-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
+  outline: none;
+}
+input:focus, select:focus { border-color: var(--accent); }
+input.invalid { border-color: var(--bad); }
+
+table { border-collapse: collapse; width: 100%; }
+th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); }
+th { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.04em; }
+tr:hover td { background: rgba(95, 184, 255, 0.04); }
+
+.tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  background: var(--bg-1);
+}
+.tag.good { color: var(--good); border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.08); }
+.tag.warn { color: var(--warn); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08); }
+.tag.bad  { color: var(--bad);  border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }
+.tag.vpn  { color: var(--vpn);  border-color: rgba(192,132,252,0.3); background: rgba(192,132,252,0.08); }
+
+.card {
+  background: var(--bg-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.muted { color: var(--text-dim); }
+.faint { color: var(--text-faint); }
+.mono  { font-family: var(--font-mono); font-size: 12px; }
+
+/* scrollbars */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
