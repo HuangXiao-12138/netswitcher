@@ -1,21 +1,8 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   // Phase 0 placeholder shell. Phase 6 replaces this with the full
-  // left-nav layout (Status / Profiles / Routes / Diagnostics / Logs).
-  let pong = "（等待后端响应…）";
-
-  async function pingBackend() {
-    try {
-      // The Wails binding is generated at build time under wailsjs/go/.
-      // Phase 0 falls back gracefully when the binding is absent.
-      const mod = await import("../wailsjs/go/main/noopAPI.js");
-      pong = await mod.Ping();
-    } catch {
-      pong = "（GUI 骨架已就绪，Phase 6 接入完整 API）";
-    }
-  }
-
-  onMount(pingBackend);
+  // left-nav layout (Status / Profiles / Routes / Diagnostics / Logs) and
+  // wires the real Wails bindings (frontend/wailsjs/go/main/API.js).
+  let pong = "（Phase 6 接入完整 API）";
 </script>
 
 <main class="shell">
