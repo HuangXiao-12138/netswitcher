@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/netswitcher/netswitcher/internal/app"
 	"github.com/netswitcher/netswitcher/internal/core"
 	"github.com/netswitcher/netswitcher/internal/logging"
 	"github.com/netswitcher/netswitcher/internal/paths"
@@ -122,19 +123,16 @@ func newServiceRunCmd(version string) *cobra.Command {
 				return err
 			}
 
-			c, err := core.New(core.Options{
+			stack, err := app.Start(core.Options{
 				ConfigPath: cfgPath,
 				StatePath:  statePath,
 				LogLevel:   gflags.logLevel,
 				LogDir:     logDir,
 			}, slog.Default())
 			if err != nil {
-				return fmt.Errorf("init core: %w", err)
+				return err
 			}
-			if err := c.Start(); err != nil {
-				return fmt.Errorf("start core: %w", err)
-			}
-			defer c.Stop()
+			defer stack.Stop()
 
 			// Block until interrupted. Windows services get SCM stop; the
 			// foreground path uses Ctrl-C / window-close.

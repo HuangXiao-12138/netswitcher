@@ -19,6 +19,7 @@ import (
 
 	"github.com/kardianos/service"
 
+	"github.com/netswitcher/netswitcher/internal/app"
 	"github.com/netswitcher/netswitcher/internal/core"
 	"github.com/netswitcher/netswitcher/internal/logging"
 	"github.com/netswitcher/netswitcher/internal/paths"
@@ -52,10 +53,11 @@ type Options struct {
 	LogLevel   string
 }
 
-// program implements service.Interface; it owns a Core once started.
+// program implements service.Interface; it owns the running app stack once
+// started.
 type program struct {
 	opts   Options
-	core   *core.Core
+	stack  *app.Stack
 	stopCh chan struct{}
 }
 
@@ -70,35 +72,31 @@ func (p *program) Start(s service.Service) error {
 	return nil
 }
 
-// run sets up logging + core and blocks until Stop signals.
+// run sets up logging + the core/IPC stack and blocks until Stop signals.
 func (p *program) run() {
 	logDir, _ := paths.LogDir()
 	cleanup, _ := logging.Configure(p.opts.LogLevel, logDir)
 	defer cleanup()
 	slog.Info("NetSwitcher service (SCM) starting")
 
-	c, err := core.New(core.Options{
+	stack, err := app.Start(core.Options{
 		ConfigPath: p.opts.ConfigPath,
 		StatePath:  p.opts.StatePath,
 		LogLevel:   p.opts.LogLevel,
 		LogDir:     logDir,
 	}, slog.Default())
 	if err != nil {
-		slog.Error("core init failed", "err", err)
+		slog.Error("service start failed", "err", err)
 		return
 	}
-	p.core = c
-	if err := c.Start(); err != nil {
-		slog.Error("core start failed", "err", err)
-		return
-	}
+	p.stack = stack
 	<-p.stopCh // wait for Stop
 }
 
 // Stop is called by kardianos when the service is stopping.
 func (p *program) Stop(s service.Service) error {
-	if p.core != nil {
-		p.core.Stop()
+	if p.stack != nil {
+		p.stack.Stop()
 	}
 	select {
 	case <-p.stopCh:

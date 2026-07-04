@@ -3,6 +3,7 @@ module github.com/netswitcher/netswitcher
 go 1.23.0
 
 require (
+	github.com/Microsoft/go-winio v0.6.1
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/kardianos/service v1.2.4
 	github.com/spf13/cobra v1.8.1
@@ -38,5 +39,7 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.23.0 // indirect
 	golang.org/x/exp v0.0.0-20230522175609-2e198f4a06a1 // indirect
+	golang.org/x/mod v0.14.0 // indirect
 	golang.org/x/net v0.25.0 // indirect
+	golang.org/x/tools v0.17.0 // indirect
 )

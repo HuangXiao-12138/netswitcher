@@ -231,6 +231,17 @@ func (c *Core) Config() *config.Config {
 	return c.cfg
 }
 
+// ManagedRoutes returns the routes currently recorded in state.json (the set
+// NetSwitcher last applied). Used by the IPC GetRouteTable handler to label
+// rows as "managed" vs system/VPN.
+func (c *Core) ManagedRoutes() []state.Entry {
+	snap, err := c.store.Load()
+	if err != nil {
+		return nil
+	}
+	return snap.Entries
+}
+
 // SetActiveProfile switches the active profile and triggers an apply.
 // Returns an error if the id does not exist.
 func (c *Core) SetActiveProfile(id string) error {
