@@ -1,0 +1,15 @@
+build/
+frontend/dist/
+frontend/node_modules/
+frontend/wailsjs/
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+vendor/
+.idea/
+.vscode/
+*.log

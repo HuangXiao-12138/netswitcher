@@ -1,0 +1,15 @@
+/* Minimal global reset for the Phase 0 shell. Phase 6 introduces the full
+   design tokens (--color-surface etc.) per the GUI spec. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+button {
+  font-family: inherit;
+}

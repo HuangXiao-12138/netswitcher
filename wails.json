@@ -1,0 +1,18 @@
+{
+  "$schema": "https://wails.io/schema.json",
+  "name": "NetSwitcher",
+  "outputfilename": "netswitcher",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "NetSwitcher"
+  },
+  "info": {
+    "productName": "NetSwitcher",
+    "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 NetSwitcher",
+    "comments": "内外网路由管理工具"
+  }
+}
