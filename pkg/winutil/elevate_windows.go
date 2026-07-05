@@ -34,6 +34,17 @@ func RelaunchElevated(exePath string) error {
 	return relaunchRunas(exePath, "")
 }
 
+// ShellOpen opens a file or folder with its default handler via the shell
+// "open" verb (Explorer for folders, the associated app for files). More
+// reliable than exec.Command("explorer.exe", path) — explorer is a GUI
+// process that opens folders by IPC-ing the running shell, which
+// CREATE_NO_WINDOW/detached spawns can break silently.
+func ShellOpen(path string) error {
+	verb, _ := windows.UTF16PtrFromString("open")
+	file, _ := windows.UTF16PtrFromString(path)
+	return windows.ShellExecute(0, verb, file, nil, nil, windows.SW_SHOWNORMAL)
+}
+
 func relaunchRunas(exePath, args string) error {
 	if exePath == "" {
 		exe, err := os.Executable()

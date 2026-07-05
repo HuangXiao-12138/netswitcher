@@ -1,24 +1,8 @@
 <script lang="ts">
-  import { createEventDispatcher } from "svelte";
-  import { api } from "../lib/ipc";
   import type { StatusResponse, Interface, ApplyResult, Conflict } from "../../wailsjs/go/models";
 
   export let status: StatusResponse | null = null;
-  export let serviceUp = false;
-  const dispatch = createEventDispatcher();
 
-  let applying = false;
-
-  async function applyNow() {
-    applying = true;
-    try {
-      await api.applyNow();
-    } catch (e: any) {
-      alert("应用失败：" + (e?.message ?? e));
-    } finally {
-      applying = false;
-    }
-  }
 
   $: last = status?.lastResult as ApplyResult | undefined;
   $: applied = last?.applied ?? [];
@@ -56,9 +40,6 @@
       {/if}
     </div>
   </div>
-  <button class="primary" on:click={applyNow} disabled={!serviceUp || applying}>
-    {applying ? "应用中…" : "立即重新应用"}
-  </button>
 </div>
 
 {#if conflicts.length > 0}

@@ -490,9 +490,7 @@ func (a *API) OpenLogFolder() error {
 	if err != nil {
 		return err
 	}
-	cmd := exec.Command("explorer.exe", logDir)
-	winutil.HideWindow(cmd)
-	return cmd.Start()
+	return winutil.ShellOpen(logDir)
 }
 
 // ---------- Auto-start (Task Scheduler) ----------
