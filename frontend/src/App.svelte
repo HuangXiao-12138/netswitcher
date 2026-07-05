@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { api, events, EVT, wc } from "./lib/ipc";
+  import { api, events, EVT, wc, getTheme, setTheme } from "./lib/ipc";
   import type { StatusResponse } from "../wailsjs/go/models";
   import Status from "./pages/Status.svelte";
   import Profiles from "./pages/Profiles.svelte";
@@ -86,6 +86,7 @@
   $: showAutoStartNudge = elevated && !autoStart;
 
   onMount(async () => {
+    setTheme(getTheme());
     await refreshState();
     if (elevated) await loadStatus();
     events.on(EVT.statusChanged, (st: StatusResponse) => {

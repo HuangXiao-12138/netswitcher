@@ -1,9 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api } from "../lib/ipc";
+  import { api, getTheme, setTheme, type ThemeId } from "../lib/ipc";
   import type { AppInfo } from "../../wailsjs/go/models";
 
   const levels = ["debug", "info", "warn", "error"];
+  const themes: { id: ThemeId; name: string; desc: string }[] = [
+    { id: "a", name: "精炼优化", desc: "继承当前网络控制台风格" },
+    { id: "b", name: "现代扁平", desc: "Linear / Notion 风克制现代" },
+    { id: "c", name: "终端主题", desc: "等宽字体 + 角标 + 青光" },
+  ];
 
   let info: AppInfo | null = null;
   let logLevel = "info";
@@ -11,8 +16,10 @@
   let elevated = false;
   let busy = false;
   let msg = "";
+  let theme: ThemeId = "a";
 
   onMount(async () => {
+    theme = getTheme();
     try {
       const [i, lvl, as, el] = await Promise.all([
         api.getAppInfo(),
@@ -28,6 +35,12 @@
       msg = "加载失败：" + (e?.message ?? e);
     }
   });
+
+  function pickTheme(id: ThemeId) {
+    theme = id;
+    setTheme(id);
+    msg = `主题已切换为「${themes.find((t) => t.id === id)?.name}」（仅本机界面，立即生效）。`;
+  }
 
   async function toggleAutoStart() {
     busy = true;
@@ -102,6 +115,21 @@
 {#if msg}
   <div class="msg">{msg}</div>
 {/if}
+
+<div class="card section">
+  <div class="section-head">
+    <h3>主题</h3>
+  </div>
+  <div class="theme-grid">
+    {#each themes as t}
+      <button class="theme-card" class:active={theme === t.id} on:click={() => pickTheme(t.id)}>
+        <div class="theme-name">{t.name}</div>
+        <div class="theme-desc">{t.desc}</div>
+        <span class="theme-tag">{t.id.toUpperCase()}</span>
+      </button>
+    {/each}
+  </div>
+</div>
 
 <div class="card section">
   <div class="section-head">
@@ -188,4 +216,17 @@
   .switch input:checked + .slider { background: var(--accent-dim); }
   .switch input:checked + .slider::before { transform: translateX(18px); background: var(--accent); }
   .switch input:disabled + .slider { opacity: 0.4; cursor: not-allowed; }
+
+  /* Theme picker. */
+  .theme-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .theme-card {
+    text-align: left; background: var(--bg-2); border: 1px solid var(--border);
+    border-radius: var(--radius-sm); padding: 12px 14px; cursor: pointer; position: relative;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .theme-card:hover { border-color: var(--accent-dim); }
+  .theme-card.active { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .theme-name { font-size: 13px; font-weight: 600; color: var(--text); }
+  .theme-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
+  .theme-tag { position: absolute; top: 8px; right: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
 </style>

@@ -481,27 +481,13 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
   .col-dest { width: 19%; } .col-if { width: 13%; } .col-gwm { width: 16%; } .col-gw { width: 19%; } .col-m { width: 8%; } .col-en { width: 8%; } .col-x { width: 40px; text-align: center; }
-  .cell { width: 100%; box-sizing: border-box; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text); padding: 5px 8px; font-size: 12.5px; border-radius: 4px; outline: none; font-family: inherit; }
-  .cell.mono { font-family: var(--font-mono); }
-  .cell:focus { border-color: var(--accent); }
-  .cell.invalid { border-color: var(--bad); }
-  /* Gateway mode (segmented) + gateway value (read-only resolved or input). */
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; white-space: nowrap; }
-  .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
-  .seg-btn:hover { color: var(--text); }
-  .seg-btn.active { background: var(--accent-dim); color: #fff; }
-  .resolved-gw { display: inline-block; font-size: 12px; color: var(--text-dim); padding: 5px 8px; background: var(--bg-0); border: 1px solid var(--border-soft); border-radius: 4px; }
+  /* .cell / .seg / .seg-btn / .toggle-sw visual styling comes from the global
+     app.css (so the theme switch applies). Here we only keep layout overrides. */
+  .cell { width: 100%; box-sizing: border-box; }
+  .resolved-gw { display: inline-block; font-size: 12px; color: var(--text-dim); padding: 5px 8px; background: var(--bg-0); border: 1px solid var(--border-soft); border-radius: var(--comp-radius); }
   .gw-ip { width: 100%; box-sizing: border-box; }
   .metric { width: 60px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
-  .toggle-sw {
-    width: 30px; height: 17px; background: var(--border); border-radius: 10px; position: relative; cursor: pointer;
-    display: inline-block; transition: background 150ms;
-  }
-  .toggle-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; background: var(--text); border-radius: 50%; transition: transform 150ms; }
-  .toggle-sw:not(.off) { background: var(--good); }
-  .toggle-sw:not(.off)::after { transform: translateX(13px); }
   .row-del { background: transparent; border: none; color: var(--text-faint); cursor: pointer; padding: 4px 8px; font-size: 16px; line-height: 1; border-radius: 4px; }
   .row-del:hover { color: var(--bad); background: rgba(248,113,113,0.08); }
 
@@ -533,14 +519,8 @@
   .unsaved-pip::before { content: '●'; font-size: 8px; }
 
   /* Buttons (local, since this page defines its own btn styles) */
-  .btn { font-family: inherit; font-size: 13px; background: var(--bg-2); color: var(--text); border: 1px solid var(--border); padding: 7px 14px; border-radius: var(--radius-sm); cursor: pointer; }
-  .btn:hover { background: var(--bg-3); border-color: var(--accent-dim); }
-  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-  .btn.primary { background: var(--accent-dim); border-color: var(--accent); color: #061018; font-weight: 600; }
-  .btn.primary:hover { background: var(--accent); }
-  .btn.ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
-  .btn.danger { border-color: #5a2a30; color: var(--bad); }
-  .btn.danger:hover { background: #3a1c22; }
+  /* .btn visual styling comes from global app.css button rules (themed).
+     Keep only size modifiers that are page-specific. */
   .btn.small { padding: 4px 10px; font-size: 12px; }
 
   .select-hint { color: var(--text-faint); padding: 40px; text-align: center; }

@@ -75,6 +75,22 @@ export const wc = {
   hide: () => WindowHide(),
 };
 
+// ── Theme (UI preference, persisted in localStorage, applies a data-theme
+// attribute on <html> that app.css keys off). Values: "a" | "b" | "c".
+export type ThemeId = "a" | "b" | "c";
+const THEME_KEY = "ns-theme";
+const VALID: ThemeId[] = ["a", "b", "c"];
+
+export function getTheme(): ThemeId {
+  const t = localStorage.getItem(THEME_KEY);
+  return VALID.includes(t as ThemeId) ? (t as ThemeId) : "a";
+}
+export function setTheme(t: ThemeId) {
+  if (!VALID.includes(t)) return;
+  localStorage.setItem(THEME_KEY, t);
+  document.documentElement.dataset.theme = t;
+}
+
 // Event names emitted by the backend.
 export const EVT = {
   diagLine: "diag:line",

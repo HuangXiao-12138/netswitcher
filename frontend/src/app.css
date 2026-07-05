@@ -1,5 +1,6 @@
-/* NetSwitcher design tokens. Dark "network console" aesthetic — deliberate
-   accent, no template look. */
+/* NetSwitcher design tokens. Dark "network console" aesthetic. Colors are
+   shared across all themes; the per-theme differences (font, radius, button
+   treatment, decorations) live in [data-theme="b"] / [data-theme="c"]. */
 :root {
   --bg-0: #0c0e13;
   --bg-1: #131720;
@@ -23,6 +24,17 @@
 
   --font-mono: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
   --font-ui: "Segoe UI", system-ui, -apple-system, sans-serif;
+
+  /* Themeable component vars (theme-a defaults = current look). */
+  --comp-font: var(--font-ui);
+  --comp-radius: 6px;
+  --btn-bg: var(--bg-2);
+  --btn-bg-hover: var(--bg-3);
+  --input-bg: var(--bg-1);
+  --primary: var(--accent-dim);
+  --primary-border: var(--accent);
+  --primary-fg: #061018;
+  --focus-ring: 0 0 0 3px rgba(95, 184, 255, 0.14);
 }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -30,45 +42,79 @@ html, body { margin: 0; padding: 0; height: 100%; }
 body {
   background: var(--bg-0);
   color: var(--text);
-  font-family: var(--font-ui);
+  font-family: var(--comp-font);
   font-size: 14px;
   -webkit-font-smoothing: antialiased;
 }
 #app { height: 100vh; display: flex; flex-direction: column; }
 
+/* ── Buttons (theme-a = current) ───────────────────────── */
 button {
-  font-family: inherit;
+  font-family: var(--comp-font);
   font-size: 13px;
-  background: var(--bg-2);
+  background: var(--btn-bg);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 6px 12px;
-  border-radius: var(--radius-sm);
+  padding: 7px 14px;
+  border-radius: var(--comp-radius);
   cursor: pointer;
-  transition: background 120ms, border-color 120ms;
+  display: inline-flex; align-items: center; justify-content: center;
+  line-height: 1; gap: 6px;
+  transition: background 120ms, border-color 120ms, transform 80ms;
 }
-button:hover { background: var(--bg-3); border-color: var(--accent-dim); }
+button:hover { background: var(--btn-bg-hover); border-color: var(--accent-dim); }
 button:active { transform: translateY(1px); }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-button.primary { background: var(--accent-dim); border-color: var(--accent); color: #061018; font-weight: 600; }
+button.primary { background: var(--primary); border-color: var(--primary-border); color: var(--primary-fg); font-weight: 600; }
 button.primary:hover { background: var(--accent); }
-button.danger { border-color: #5a2a30; }
+button.danger { border-color: #5a2a30; color: var(--bad); }
 button.danger:hover { background: #3a1c22; }
 button.ghost { background: transparent; border-color: transparent; color: var(--text-dim); }
 button.ghost:hover { background: var(--bg-2); color: var(--text); }
 
+/* ── Inputs / selects ──────────────────────────────────── */
 input, select {
-  font-family: inherit;
+  font-family: var(--comp-font);
   font-size: 13px;
-  background: var(--bg-1);
+  background: var(--input-bg);
   color: var(--text);
   border: 1px solid var(--border);
-  padding: 6px 9px;
-  border-radius: var(--radius-sm);
+  padding: 7px 10px;
+  border-radius: var(--comp-radius);
   outline: none;
 }
-input:focus, select:focus { border-color: var(--accent); }
+input:focus, select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
 input.invalid { border-color: var(--bad); }
+
+/* Shared component classes (used across pages, themed). */
+.btn { /* same as button — explicit class for pages that prefer it */ }
+.cell {
+  background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text);
+  padding: 5px 8px; font-size: 12.5px; border-radius: var(--comp-radius); outline: none;
+  font-family: var(--comp-font);
+}
+.cell.mono { font-family: var(--font-mono); }
+.cell:focus { border-color: var(--accent); }
+.cell.invalid { border-color: var(--bad); }
+
+.toggle-sw {
+  width: 30px; height: 17px; background: var(--border); border-radius: 10px;
+  position: relative; cursor: pointer; display: inline-block; transition: background 150ms;
+  flex-shrink: 0;
+}
+.toggle-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 13px; height: 13px; background: var(--text); border-radius: 50%; transition: transform 150ms; }
+.toggle-sw:not(.off) { background: var(--good); }
+.toggle-sw:not(.off)::after { transform: translateX(13px); }
+
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--comp-radius); overflow: hidden; }
+.seg-btn {
+  background: var(--bg-0); border: none; color: var(--text-dim);
+  padding: 5px 11px; font-size: 12px; cursor: pointer;
+  font-family: var(--comp-font); line-height: 1.2; white-space: nowrap;
+}
+.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+.seg-btn:hover { color: var(--text); }
+.seg-btn.active { background: var(--accent-dim); color: #fff; }
 
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); }
@@ -76,31 +122,71 @@ th { font-size: 12px; font-weight: 600; color: var(--text-dim); text-transform: 
 tr:hover td { background: rgba(95, 184, 255, 0.04); }
 
 .tag {
-  display: inline-block;
-  font-size: 11px;
-  padding: 1px 7px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  color: var(--text-dim);
-  background: var(--bg-1);
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11px; padding: 2px 8px;
+  border-radius: 999px; border: 1px solid var(--border);
+  color: var(--text-dim); background: var(--bg-1); line-height: 1.4;
 }
 .tag.good { color: var(--good); border-color: rgba(74,222,128,0.3); background: rgba(74,222,128,0.08); }
 .tag.warn { color: var(--warn); border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08); }
 .tag.bad  { color: var(--bad);  border-color: rgba(248,113,113,0.3); background: rgba(248,113,113,0.08); }
 .tag.vpn  { color: var(--vpn);  border-color: rgba(192,132,252,0.3); background: rgba(192,132,252,0.08); }
 
-.card {
-  background: var(--bg-1);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-}
-
+.card { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
 .muted { color: var(--text-dim); }
 .faint { color: var(--text-faint); }
-.mono  { font-family: var(--font-mono); font-size: 12px; }
+.mono  { font-family: var(--font-mono); }
 
 /* scrollbars */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-thumb { background: var(--bg-3); border-radius: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
+
+/* ════════════════════════════════════════════════════════
+   Theme B · 现代扁平 (Linear/Notion) — transparent defaults,
+   solid blue primary, soft focus ring.
+   ════════════════════════════════════════════════════════ */
+[data-theme="b"] {
+  --comp-radius: 7px;
+  --btn-bg: transparent;
+  --btn-bg-hover: var(--bg-2);
+  --input-bg: transparent;
+  --primary: #3b82f6;
+  --primary-border: #3b82f6;
+  --primary-fg: #ffffff;
+  --focus-ring: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+[data-theme="b"] button.primary { background: #3b82f6; border-color: #3b82f6; }
+[data-theme="b"] button.primary:hover { background: #60a5fa; border-color: #60a5fa; }
+[data-theme="b"] input:hover, [data-theme="b"] select:hover { border-color: var(--text-faint); }
+[data-theme="b"] .tag { border-radius: 4px; }            /* squarer chips */
+[data-theme="b"] .seg-btn.active { background: var(--bg-2); color: var(--text); font-weight: 600; }
+
+/* ════════════════════════════════════════════════════════
+   Theme C · 终端主题 — mono font, tiny radius, cyan glow,
+   [ ] brackets on action buttons.
+   ════════════════════════════════════════════════════════ */
+[data-theme="c"] {
+  --comp-font: var(--font-mono);
+  --comp-radius: 3px;
+  --btn-bg: #0d1017;
+  --btn-bg-hover: #131720;
+  --input-bg: #0d1017;
+  --primary: rgba(95, 184, 255, 0.12);
+  --primary-border: var(--accent);
+  --primary-fg: var(--accent);
+  --focus-ring: 0 0 0 1px rgba(95, 184, 255, 0.3);
+}
+[data-theme="c"] body { background: #07090d; }
+[data-theme="c"] button { letter-spacing: 0.02em; font-weight: 600; }
+[data-theme="c"] button:hover { border-color: var(--accent); color: var(--accent); box-shadow: 0 0 12px rgba(95, 184, 255, 0.15); }
+/* [ ] brackets only on explicit action buttons (.btn / .primary), not nav/window rows. */
+[data-theme="c"] .btn::before, [data-theme="c"] button.primary::before { content: '['; color: var(--text-faint); margin-right: 4px; font-weight: 400; }
+[data-theme="c"] .btn::after,  [data-theme="c"] button.primary::after  { content: ']'; color: var(--text-faint); margin-left: 4px; font-weight: 400; }
+[data-theme="c"] button.primary { background: rgba(95, 184, 255, 0.1); }
+[data-theme="c"] button.primary:hover { background: rgba(95, 184, 255, 0.18); box-shadow: 0 0 16px rgba(95, 184, 255, 0.25); }
+[data-theme="c"] .toggle-sw { border-radius: 2px; }
+[data-theme="c"] .toggle-sw:not(.off) { background: rgba(95, 184, 255, 0.15); box-shadow: 0 0 8px rgba(95, 184, 255, 0.2); }
+[data-theme="c"] .tag { border-radius: 2px; font-family: var(--font-mono); background: #0d1017; }
+[data-theme="c"] .seg-btn { font-family: var(--font-mono); letter-spacing: 0.02em; }
+[data-theme="c"] .seg-btn.active { background: rgba(95, 184, 255, 0.12); color: var(--accent); }
