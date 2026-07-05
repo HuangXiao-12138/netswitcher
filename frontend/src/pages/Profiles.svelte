@@ -187,6 +187,7 @@
     <div class="err">{errorText}</div>
   {/if}
 
+  {#if (config?.profiles ?? []).length > 0}
   <div class="layout">
   <aside class="prof-list">
     {#each config?.profiles ?? [] as p}
@@ -200,8 +201,6 @@
           <span class="tag good">活动</span>
         {/if}
       </button>
-    {:else}
-      <div class="faint" style="padding:12px;font-size:12px"></div>
     {/each}
   </aside>
 
@@ -311,17 +310,18 @@
         <button on:click={setActive} disabled={editing.id === activeId}>设为活动</button>
         <button class="danger" on:click={deleteProfile} disabled={deleting}>{deleting ? "删除中…" : "删除"}</button>
       </div>
-    {:else if (config?.profiles ?? []).length === 0}
-      <div class="empty-state">
-        <h3>还没有路由配置</h3>
-        <p class="muted">新建一个配置，添加"哪些网段走哪块网卡"的规则，<br />NetSwitcher 会自动维护，网络变化也会重新下发。</p>
-        <button class="primary" on:click={newProfile}>+ 新建第一个配置</button>
-      </div>
     {:else}
       <p class="muted">从左侧选择一个配置查看或编辑。</p>
     {/if}
   </div>
 </div>
+  {:else}
+    <div class="empty-state">
+      <h3>还没有路由配置</h3>
+      <p class="muted">新建一个配置，添加"哪些网段走哪块网卡"的规则，<br />NetSwitcher 会自动维护，网络变化也会重新下发。</p>
+      <button class="primary" on:click={newProfile}>+ 新建第一个配置</button>
+    </div>
+  {/if}
 </div>
 
 {#if pendingDelete}
@@ -378,14 +378,14 @@
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
 
-  /* No-profiles empty state — tall enough to visually center in the editor
-     area. Uses a viewport-based min-height because the .layout grid row is
-     auto-sized (content height), so min-height:100% would resolve to the
-     empty state's own content, not the page. */
+  /* No-profiles empty state — rendered as a direct flex child of .profiles-page
+     (the .layout grid is not rendered at all when there are no profiles), so
+     flex:1 fills the whole page below the head and centers across the full
+     width (not just the editor column). */
   .empty-state {
+    flex: 1; min-height: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     text-align: center; gap: 12px; padding: 32px 24px;
-    min-height: calc(100vh - 180px);
   }
   .empty-state h3 { margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); }
   .empty-state p { margin: 0; font-size: 13px; line-height: 1.6; max-width: 420px; }
