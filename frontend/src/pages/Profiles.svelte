@@ -216,7 +216,7 @@
           <h3>规则 ({editing.rules.length})</h3>
           <button on:click={addRule}>+ 添加规则</button>
         </div>
-        <div class="card" style="padding:0">
+        <div class="card rule-table-wrap" style="padding:0">
           <table>
             <thead>
               <tr><th>目标 CIDR</th><th>接口</th><th>网关</th><th>Metric</th><th>启用</th><th></th></tr>
@@ -226,24 +226,24 @@
                 <tr>
                   <td>
                     <input
-                      class="mono small {ruleErr(i, 'destination') ? 'invalid' : ''}"
+                      class="cell-input mono {ruleErr(i, 'destination') ? 'invalid' : ''}"
                       value={r.destination}
                       on:input={(e) => ruleField(i, "destination", e.currentTarget.value)}
                     />
                     {#if ruleErr(i, "destination")}<div class="field-err">{ruleErr(i, "destination")}</div>{/if}
                   </td>
                   <td>
-                    <select on:change={(e) => ruleField(i, "viaInterface", e.currentTarget.value)}>
+                    <select class="cell-input" on:change={(e) => ruleField(i, "viaInterface", e.currentTarget.value)}>
                       {#each interfaces as ifc}
                         <option value={ifc.Name} selected={ifc.Name === r.viaInterface}>{ifc.Name}</option>
                       {/each}
                     </select>
                   </td>
                   <td>
-                    <input class="mono small" value={r.viaGateway} on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
+                    <input class="cell-input mono" value={r.viaGateway} on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
                   </td>
                   <td>
-                    <input class="mono small" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} />
+                    <input class="cell-input mono" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} />
                   </td>
                   <td style="text-align:center">
                     <input type="checkbox" checked={r.enabled !== false} on:change={(e) => ruleField(i, "enabled", e.currentTarget.checked)} />
@@ -283,6 +283,18 @@
   .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); flex: 1; min-width: 180px; }
   .form-row label.check { flex-direction: row; align-items: center; gap: 8px; }
   .small { padding: 4px 6px; font-size: 12px; min-width: 120px; }
+  /* Rule-table inputs fill their cell instead of forcing min-width (which
+     made the row wider than the table and spilled out). */
+  .cell-input {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 4px 6px;
+    font-size: 12px;
+  }
+  /* Let the rule table scroll horizontally on very narrow windows instead of
+     overflowing the card. */
+  .rule-table-wrap { overflow-x: auto; }
+  .rule-table-wrap table { min-width: 560px; }
   .rules-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
