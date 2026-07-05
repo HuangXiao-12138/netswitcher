@@ -277,11 +277,11 @@
     display: flex; align-items: center; gap: 10px;
     background: transparent; border: 1px solid transparent;
     text-align: left; padding: 9px 11px; border-radius: var(--radius-sm);
-    color: var(--text-dim);
+    color: var(--text-dim); line-height: 1; width: 100%;
   }
   .nav-item:hover { background: var(--bg-2); color: var(--text); }
   .nav-item.active { background: rgba(95,184,255,0.1); border-color: rgba(95,184,255,0.25); color: var(--accent); }
-  .nav-icon { width: 16px; text-align: center; opacity: 0.85; }
+  .nav-icon { width: 16px; height: 16px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; opacity: 0.85; font-size: 14px; }
   .content { flex: 1; overflow: auto; padding: 18px 22px; }
 
   .modal-backdrop {

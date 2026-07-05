@@ -86,6 +86,19 @@ input, select {
 input:focus, select:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
 input.invalid { border-color: var(--bad); }
 
+/* Custom select chevron (native arrow is unthemeable). */
+select {
+  appearance: none;
+  -webkit-appearance: none;
+  padding-right: 28px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%239aa3b5' stroke-width='1.5'><path d='m1 1 4 4 4-4'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+}
+[data-theme="c"] select {
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%236b7388' stroke-width='1.5'><path d='m1 1 4 4 4-4'/></svg>");
+}
+
 /* Shared component classes (used across pages, themed). */
 .btn { /* same as button — explicit class for pages that prefer it */ }
 .cell {
