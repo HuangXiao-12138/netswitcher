@@ -102,6 +102,7 @@
 
 <header class="topbar">
   <div class="brand">
+    <img class="brand-logo" src="/logo.png" alt="NetSwitcher" />
     <div class="brand-text">
       <span class="title">NetSwitcher</span>
       <span class="subtitle">内外网路由管理</span>
@@ -204,7 +205,8 @@
        override it to a non-"drag" value. */
     --wails-draggable: drag;
   }
-  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-logo { width: 24px; height: 24px; -webkit-app-region: no-drag; pointer-events: none; }
   .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
   .title { font-weight: 700; font-size: 15px; }
   .subtitle { font-size: 11px; color: var(--text-dim); }

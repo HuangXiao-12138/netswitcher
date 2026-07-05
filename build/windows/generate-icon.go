@@ -148,4 +148,17 @@ func main() {
 		panic(err)
 	}
 	os.Stderr.WriteString("wrote " + outPath + " (N monogram, 16/32/48/256, 32-bit PNG ICO)\n")
+
+	// Also emit a 64px PNG for the in-app topbar logo (frontend/public/logo.png),
+	// served by Vite at /logo.png so it stays in sync with the exe icon.
+	logoImg := drawN(64)
+	var logoBuf bytes.Buffer
+	if err := png.Encode(&logoBuf, logoImg); err != nil {
+		panic(err)
+	}
+	logoPath := filepath.Join("frontend", "public", "logo.png")
+	if err := os.WriteFile(logoPath, logoBuf.Bytes(), 0o644); err != nil {
+		panic(err)
+	}
+	os.Stderr.WriteString("wrote " + logoPath + " (topbar logo, 64px)\n")
 }
