@@ -29,6 +29,7 @@ export function SaveConfig(config: Config): Promise<void>;
 export function SaveProfile(profile: Profile): Promise<void>;
 export function DeleteProfile(id: string): Promise<void>;
 export function SetActiveProfile(id: string): Promise<void>;
+export function DeactivateProfile(): Promise<void>;
 export function ApplyNow(): Promise<ApplyResult>;
 export function GetRouteTable(): Promise<RouteRow[]>;
 export function Ping(target: string): Promise<void>;

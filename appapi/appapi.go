@@ -249,6 +249,16 @@ func (a *API) SetActiveProfile(id string) error {
 	return a.core.SetActiveProfile(id)
 }
 
+// DeactivateProfile clears the active profile — no profile active means the
+// engine removes any previously-managed routes and adds nothing. System/DHCP/
+// VPN routes are left as-is. The frontend "停用" button uses this.
+func (a *API) DeactivateProfile() error {
+	if a.core == nil {
+		return errEngine
+	}
+	return a.core.Deactivate()
+}
+
 // ApplyNow forces a re-apply and returns the result.
 func (a *API) ApplyNow() (routeengine.ApplyResult, error) {
 	if a.core == nil {

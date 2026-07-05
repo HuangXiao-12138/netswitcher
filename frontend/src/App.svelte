@@ -100,7 +100,7 @@
   });
 </script>
 
-<header class="topbar">
+<header class="topbar" on:dblclick={wc.toggleMax}>
   <div class="brand">
     <img class="brand-logo" src="/logo.png" alt="NetSwitcher" />
     <div class="brand-text">
@@ -204,6 +204,10 @@
        -webkit-app-region). Any descendant that should be clickable must
        override it to a non-"drag" value. */
     --wails-draggable: drag;
+    /* user-select:none stops text selection from competing with the drag
+       handler — without it clicks on the title text often show the "no" cursor
+       and refuse to drag. */
+    user-select: none;
   }
   .brand { display: flex; align-items: center; gap: 10px; }
   .brand-logo { width: 24px; height: 24px; -webkit-app-region: no-drag; pointer-events: none; }

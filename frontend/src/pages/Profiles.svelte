@@ -163,6 +163,15 @@
     }
   }
 
+  async function deactivate() {
+    try {
+      await api.deactivateProfile();
+      await load();
+    } catch (e: any) {
+      parseError(e);
+    }
+  }
+
   function parseError(e: any) {
     const msg = e?.message ?? String(e);
     errorText = msg;
@@ -350,7 +359,11 @@
           {#if dirty}<span class="unsaved-pip">有未保存的修改</span>{/if}
           <span class="spacer"></span>
           <button class="btn primary" on:click={save} disabled={!dirty || saving}>{saving ? "保存中…" : "保存"}</button>
-          <button class="btn" on:click={setActive} disabled={editing.id === activeId}>设为活动</button>
+          {#if editing.id === activeId}
+            <button class="btn" on:click={deactivate} title="停用此配置，清空活动状态，已下发路由会被移除">停用</button>
+          {:else}
+            <button class="btn" on:click={setActive}>设为活动</button>
+          {/if}
           <span class="divider"></span>
           <button class="btn danger" on:click={deleteProfile} disabled={deleting}>{deleting ? "删除中…" : "删除"}</button>
         </div>
@@ -498,7 +511,7 @@
   .check-inline { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; color: var(--text-dim); }
 
   /* Action bar */
-  .actionbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border-soft); }
+  .actionbar { display: flex; align-items: center; gap: 8px; padding-top: 16px; border-top: 1px solid var(--border-soft); margin-bottom: 14px; }
   .actionbar .spacer { flex: 1; }
   .actionbar .divider { width: 1px; height: 22px; background: var(--border); margin: 0 6px; }
   .unsaved-pip { font-family: var(--font-mono); font-size: 11px; color: var(--warn); display: inline-flex; align-items: center; gap: 5px; }

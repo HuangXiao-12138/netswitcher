@@ -244,6 +244,25 @@ func (c *Core) ManagedRoutes() []state.Entry {
 
 // SetActiveProfile switches the active profile and triggers an apply.
 // Returns an error if the id does not exist.
+// Deactivate clears the active profile (no profile active = manage nothing).
+// The next apply removes any previously-managed routes; system/DHCP/VPN routes
+// are left untouched. Empty activeProfile is a valid state (Validate allows it).
+func (c *Core) Deactivate() error {
+	c.mu.Lock()
+	cfg := c.cfg
+	c.mu.Unlock()
+
+	cfg.ActiveProfile = ""
+	if err := config.Save(c.opts.ConfigPath, cfg, c.cfgWatcher); err != nil {
+		return err
+	}
+	c.mu.Lock()
+	c.cfg = cfg
+	c.mu.Unlock()
+	c.ApplyOnce("deactivate")
+	return nil
+}
+
 func (c *Core) SetActiveProfile(id string) error {
 	c.mu.Lock()
 	cfg := c.cfg

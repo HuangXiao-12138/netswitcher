@@ -63,6 +63,10 @@ export function SetActiveProfile(id) {
   return window.go.appapi.API.SetActiveProfile(id);
 }
 
+export function DeactivateProfile() {
+  return window.go.appapi.API.DeactivateProfile();
+}
+
 export function ApplyNow() {
   return window.go.appapi.API.ApplyNow();
 }
