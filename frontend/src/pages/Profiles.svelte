@@ -271,7 +271,7 @@
             <div class="rules-scroll">
               <table>
                 <thead>
-                  <tr><th class="col-dest">目标 CIDR</th><th class="col-if">接口</th><th class="col-gwm">网关模式</th><th class="col-gw">网关</th><th class="col-m">Metric</th><th class="col-en">启用</th><th></th></tr>
+                  <tr><th class="col-dest">目标 CIDR</th><th class="col-if">接口</th><th class="col-gwm">网关模式</th><th class="col-gw">网关</th><th class="col-m">Metric</th><th class="col-en">启用</th><th class="col-x"></th></tr>
                 </thead>
                 <tbody>
                   {#each editing.rules as r, i}
@@ -468,7 +468,7 @@
   th { font-size: 11px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg-2); }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
-  .col-dest { width: 18%; } .col-if { width: 13%; } .col-gwm { width: 11%; } .col-gw { width: 19%; } .col-m { width: 8%; } .col-en { width: 8%; }
+  .col-dest { width: 20%; } .col-if { width: 13%; } .col-gwm { width: 14%; } .col-gw { width: 20%; } .col-m { width: 8%; } .col-en { width: 8%; } .col-x { width: 36px; }
   .cell { width: 100%; box-sizing: border-box; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text); padding: 5px 8px; font-size: 12.5px; border-radius: 4px; outline: none; font-family: inherit; }
   .cell.mono { font-family: var(--font-mono); }
   .cell:focus { border-color: var(--accent); }
