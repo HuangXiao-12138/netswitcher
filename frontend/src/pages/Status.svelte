@@ -159,6 +159,7 @@
   h2 { margin: 0; font-size: 18px; }
   h3 { margin: 18px 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .conflicts { background: rgba(192,132,252,0.06); border: 1px solid rgba(192,132,252,0.25); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
+  .conflicts h3 { margin: 0 0 8px; } /* override the 18px section-title top margin */
   .conflict-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
   .conflict-text { flex: 1; }
   .dismiss { background: transparent; border: none; color: var(--text-faint); font-size: 16px; line-height: 1; padding: 0 6px; cursor: pointer; }
