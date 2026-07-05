@@ -301,7 +301,7 @@
                       </td>
                       <td><input class="cell mono metric" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} /></td>
                       <td><span class="toggle-sw" class:off={r.enabled === false} on:click={() => ruleField(i, "enabled", !(r.enabled !== false))} role="switch" tabindex="0"></span></td>
-                      <td><button class="row-del" on:click={() => removeRule(i)} title="删除规则">×</button></td>
+                      <td class="col-x"><button class="row-del" on:click={() => removeRule(i)} title="删除规则">×</button></td>
                     </tr>
                   {/each}
                 </tbody>
@@ -468,14 +468,14 @@
   th { font-size: 11px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg-2); }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
-  .col-dest { width: 20%; } .col-if { width: 13%; } .col-gwm { width: 14%; } .col-gw { width: 20%; } .col-m { width: 8%; } .col-en { width: 8%; } .col-x { width: 36px; }
+  .col-dest { width: 19%; } .col-if { width: 13%; } .col-gwm { width: 16%; } .col-gw { width: 19%; } .col-m { width: 8%; } .col-en { width: 8%; } .col-x { width: 40px; text-align: center; }
   .cell { width: 100%; box-sizing: border-box; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text); padding: 5px 8px; font-size: 12.5px; border-radius: 4px; outline: none; font-family: inherit; }
   .cell.mono { font-family: var(--font-mono); }
   .cell:focus { border-color: var(--accent); }
   .cell.invalid { border-color: var(--bad); }
   /* Gateway mode (segmented) + gateway value (read-only resolved or input). */
   .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
-  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; }
+  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; white-space: nowrap; }
   .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
   .seg-btn:hover { color: var(--text); }
   .seg-btn.active { background: var(--accent-dim); color: #fff; }
