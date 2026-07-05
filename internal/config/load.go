@@ -66,12 +66,9 @@ func Validate(c *Config) ValidationErrors {
 		})
 	}
 
-	if strings.TrimSpace(c.ActiveProfile) == "" {
-		errs = append(errs, ValidationError{
-			Path: "activeProfile", Code: CodeMissingField,
-			Message: "activeProfile is required",
-		})
-	}
+	// activeProfile may be empty: it means "no profile active, manage nothing"
+	// (system routes are left as-is). When non-empty it must reference an
+	// existing profile id — checked below.
 
 	seenProfileID := make(map[string]int, len(c.Profiles))
 	for i := range c.Profiles {
