@@ -10,9 +10,11 @@
 package appapi
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
 	"os"
 	"os/exec"
@@ -491,6 +493,76 @@ func (a *API) OpenLogFolder() error {
 		return err
 	}
 	return winutil.ShellOpen(logDir)
+}
+
+// RecentLogs returns up to the last n JSON log lines from the log file, oldest
+// first. Used by the Logs page to show history on open (live subscription only
+// covers logs emitted AFTER opening). Reads backward in chunks so a 50MB log
+// doesn't get loaded whole.
+func (a *API) RecentLogs(n int) ([]string, error) {
+	if n <= 0 {
+		n = 500
+	}
+	p, err := paths.LogPath()
+	if err != nil {
+		return nil, err
+	}
+	return tailLines(p, n)
+}
+
+// tailLines reads the last <=n newline-delimited records from path, returning
+// them in chronological order (oldest of the set first).
+func tailLines(path string, n int) ([]string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err // file may not exist yet — caller treats as empty
+	}
+	defer f.Close()
+
+	const chunk = 8192
+	var collected []string // newest-first as we walk backward
+	tail := []byte(nil)    // bytes carried into the previous (earlier) chunk
+	offset, _ := f.Seek(0, io.SeekEnd)
+
+	for offset > 0 {
+		read := int64(chunk)
+		if offset < read {
+			read = offset
+		}
+		offset -= read
+		if _, err := f.Seek(offset, io.SeekStart); err != nil {
+			return nil, err
+		}
+		buf := make([]byte, read)
+		if _, err := io.ReadFull(f, buf); err != nil {
+			return nil, err
+		}
+		data := append(buf, tail...)
+		// Split on newlines. parts[0] is the partial line continuing into an
+		// earlier chunk; parts[1:] are complete lines (in file order).
+		parts := bytes.Split(data, []byte("\n"))
+		tail = parts[0]
+		for i := len(parts) - 1; i >= 1; i-- {
+			if len(bytes.TrimSpace(parts[i])) > 0 {
+				collected = append(collected, string(parts[i]))
+				if len(collected) >= n {
+					out := make([]string, len(collected))
+					for i, s := range collected {
+						out[len(out)-1-i] = s // reverse to chronological
+					}
+					return out, nil
+				}
+			}
+		}
+	}
+	if len(bytes.TrimSpace(tail)) > 0 {
+		collected = append(collected, string(tail))
+	}
+	out := make([]string, len(collected))
+	for i, s := range collected {
+		out[len(out)-1-i] = s
+	}
+	return out, nil
 }
 
 // ---------- Auto-start (Task Scheduler) ----------

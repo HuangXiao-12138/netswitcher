@@ -87,6 +87,10 @@ export function SubscribeLogs(level) {
   return window.go.appapi.API.SubscribeLogs(level);
 }
 
+export function RecentLogs(n) {
+  return window.go.appapi.API.RecentLogs(n);
+}
+
 export function GetAppInfo() {
   return window.go.appapi.API.GetAppInfo();
 }

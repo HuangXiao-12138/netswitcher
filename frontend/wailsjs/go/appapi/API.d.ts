@@ -35,6 +35,7 @@ export function Ping(target: string): Promise<void>;
 export function Tracert(target: string): Promise<void>;
 export function StopDiag(): Promise<void>;
 export function SubscribeLogs(level: string): Promise<void>;
+export function RecentLogs(n: number): Promise<string[]>;
 
 export function GetAppInfo(): Promise<AppInfo>;
 export function GetLogLevel(): Promise<string>;

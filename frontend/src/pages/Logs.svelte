@@ -7,27 +7,41 @@
   let filter = "";
   let entries: any[] = [];
   let subscribed = false;
+  let loading = true;
 
   const levels: Level[] = ["debug", "info", "warn", "error"];
+  const levelRank: Record<string, number> = { debug: 0, info: 1, warn: 2, warning: 2, error: 3 };
 
   onMount(() => { subscribe(); });
   onDestroy(() => { try { events.off(EVT.logLine); } catch {} });
 
-  function subscribe() {
-    entries = [];
+  async function subscribe() {
     try { events.off(EVT.logLine); } catch {}
     events.on(EVT.logLine, onLine);
+    // Load recent history first (covers logs emitted before the page opened,
+    // e.g. startup apply), then start the live stream.
+    loading = true;
+    entries = [];
+    try {
+      const lines = await api.recentLogs(500);
+      for (const line of lines) onLine(line);
+    } catch { /* file may not exist yet */ }
     api.subscribeLogs(level);
     subscribed = true;
+    loading = false;
   }
 
   function onLine(raw: string) {
     let rec: any;
     try { rec = JSON.parse(raw); } catch { rec = { msg: raw, level: "INFO" }; }
-    entries = [...entries.slice(-499), rec];
+    entries = [...entries.slice(-999), rec];
   }
 
+  // Client-side level filter (history is loaded all-levels; live is server-filtered
+  // but we re-filter to stay consistent when level changes mid-stream).
   $: visible = entries.filter((e) => {
+    const lr = levelRank[(e.level ?? "info").toLowerCase()] ?? 1;
+    if (lr < levelRank[level]) return false;
     if (!filter.trim()) return true;
     const q = filter.toLowerCase();
     return (e.msg ?? "").toLowerCase().includes(q) || JSON.stringify(e).toLowerCase().includes(q);
@@ -65,7 +79,7 @@
       {/if}
     </div>
   {:else}
-    <div class="faint" style="padding:8px">等待日志…（订阅级别：{level}）</div>
+    <div class="faint" style="padding:8px">{loading ? "加载历史日志…" : `等待日志…（级别 ≥ ${level}）`}</div>
   {/each}
 </div>
 
