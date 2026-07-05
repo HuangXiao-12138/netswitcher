@@ -13,44 +13,72 @@
   export let value = "";
   export let placeholder = "";
   export let disabled = false;
-  export let classExtra = "";
 
   const dispatch = createEventDispatcher();
   let open = false;
-  let root: HTMLElement;
+  let triggerEl: HTMLButtonElement;
+  let menuEl: HTMLDivElement;
+  let menuStyle = "";
 
   const current = () => options.find((o) => o.value === value);
 
-  function toggle() {
+  function placeMenu() {
+    if (!triggerEl) return;
+    const r = triggerEl.getBoundingClientRect();
+    // position: fixed escapes any ancestor overflow (e.g. the rule table's
+    // overflow:auto / the card's overflow:hidden) so the menu floats above
+    // the table instead of being clipped inside the cell.
+    menuStyle = `position: fixed; top: ${r.bottom + 4}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px;`;
+  }
+  function openMenu() {
     if (disabled) return;
-    open = !open;
+    placeMenu();
+    open = true;
+  }
+  function toggle() {
+    if (open) open = false;
+    else openMenu();
   }
   function pick(o: SelectOption) {
     value = o.value;
     open = false;
     dispatch("change", o.value);
   }
+  // Portal action: move the menu node to <body> so it's outside the table's
+  // DOM subtree (and any overflow / stacking-context traps there).
+  function portal(node: HTMLElement) {
+    document.body.appendChild(node);
+    return { destroy() { node.remove(); } };
+  }
   function onDocClick(e: MouseEvent) {
-    if (root && !root.contains(e.target as Node)) open = false;
+    if (!open) return;
+    const t = e.target as Node;
+    if (triggerEl?.contains(t)) return;
+    if (menuEl?.contains(t)) return;
+    open = false;
   }
-  function onKey(e: KeyboardEvent) {
-    if (e.key === "Escape") open = false;
-  }
+  function onScroll() { if (open) open = false; } // close on any scroll (nested included)
+  function onKey(e: KeyboardEvent) { if (e.key === "Escape") open = false; }
   onMount(() => {
-    document.addEventListener("click", onDocClick);
+    document.addEventListener("click", onDocClick, true);
+    document.addEventListener("scroll", onScroll, true);
     document.addEventListener("keydown", onKey);
+    window.addEventListener("resize", onScroll);
   });
   onDestroy(() => {
-    document.removeEventListener("click", onDocClick);
+    document.removeEventListener("click", onDocClick, true);
+    document.removeEventListener("scroll", onScroll, true);
     document.removeEventListener("keydown", onKey);
+    window.removeEventListener("resize", onScroll);
   });
 </script>
 
-<div class="ns-select" bind:this={root}>
+<div class="ns-select">
   <button
     type="button"
-    class="ns-sel-trigger {classExtra}"
+    class="ns-sel-trigger"
     on:click={toggle}
+    bind:this={triggerEl}
     {disabled}
     aria-haspopup="listbox"
     aria-expanded={open}
@@ -58,32 +86,31 @@
     <span class="ns-sel-label">{current()?.label || placeholder || "—"}</span>
     <span class="ns-sel-caret" class:open></span>
   </button>
-  {#if open}
-    <div class="ns-sel-menu" role="listbox">
-      {#each options as o}
-        <button
-          type="button"
-          class="ns-sel-opt"
-          class:sel={o.value === value}
-          on:click={() => pick(o)}
-          role="option"
-          aria-selected={o.value === value}
-        >
-          {o.label}
-        </button>
-      {/each}
-      {#if options.length === 0}
-        <div class="ns-sel-empty">无选项</div>
-      {/if}
-    </div>
-  {/if}
 </div>
+
+{#if open}
+  <div bind:this={menuEl} use:portal class="ns-sel-menu" style={menuStyle} role="listbox">
+    {#each options as o}
+      <button
+        type="button"
+        class="ns-sel-opt"
+        class:sel={o.value === value}
+        on:click={() => pick(o)}
+        role="option"
+        aria-selected={o.value === value}
+      >
+        {o.label}
+      </button>
+    {/each}
+    {#if options.length === 0}
+      <div class="ns-sel-empty">无选项</div>
+    {/if}
+  </div>
+{/if}
 
 <style>
   .ns-select { position: relative; display: inline-block; width: 100%; }
 
-  /* Trigger looks like a themed button + chevron. Uses CSS vars from app.css
-     so it follows the active theme. */
   .ns-sel-trigger {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
     gap: 8px; text-align: left;
@@ -99,7 +126,6 @@
   .ns-sel-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
   .ns-sel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-  /* CSS chevron (no font glyph dependency). */
   .ns-sel-caret {
     width: 0; height: 0; flex-shrink: 0;
     border-left: 4px solid transparent; border-right: 4px solid transparent;
@@ -108,24 +134,25 @@
   }
   .ns-sel-caret.open { transform: rotate(180deg); }
 
-  /* Popup menu — the part native <option> can't theme. */
-  .ns-sel-menu {
-    position: absolute; top: calc(100% + 4px); left: 0; z-index: 50;
-    min-width: 100%; max-height: 280px; overflow: auto;
+  /* Menu — rendered in <body> (portal) + position: fixed (inline style), so
+     no parent overflow clips it. z-index high to sit above the table. */
+  :global(.ns-sel-menu) {
+    z-index: 1000;
+    max-height: 280px; overflow: auto;
     background: var(--bg-1); border: 1px solid var(--border);
     border-radius: var(--comp-radius);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
     padding: 4px;
     display: flex; flex-direction: column; gap: 1px;
   }
-  .ns-sel-opt {
+  :global(.ns-sel-opt) {
     text-align: left; width: 100%;
     background: transparent; border: none; color: var(--text-dim);
     padding: 7px 10px; border-radius: calc(var(--comp-radius) - 2px);
     cursor: pointer; font-family: var(--comp-font); font-size: 13px; line-height: 1.2;
     transition: background 100ms, color 100ms;
   }
-  .ns-sel-opt:hover { background: var(--bg-2); color: var(--text); }
-  .ns-sel-opt.sel { background: var(--bg-2); color: var(--accent); }
-  .ns-sel-empty { padding: 8px 10px; color: var(--text-faint); font-size: 12px; }
+  :global(.ns-sel-opt:hover) { background: var(--bg-2); color: var(--text); }
+  :global(.ns-sel-opt.sel) { background: var(--bg-2); color: var(--accent); }
+  :global(.ns-sel-empty) { padding: 8px 10px; color: var(--text-faint); font-size: 12px; }
 </style>
