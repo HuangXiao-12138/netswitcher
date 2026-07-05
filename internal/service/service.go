@@ -151,6 +151,27 @@ func Start() error {
 	return svc.Start()
 }
 
+// Ensure is the one-click setup the GUI's "start service" button uses:
+// install the service if it isn't already, then start it. Idempotent — safe
+// to call when the service is already installed and/or running.
+func Ensure(opts Options) error {
+	if err := ensureDataDir(); err != nil {
+		return err
+	}
+	svc, _, err := new(opts)
+	if err != nil {
+		return err
+	}
+	// Install is a no-op-tolerant: if already installed, ignore that error.
+	if err := svc.Install(); err != nil {
+		// kardianos surfaces "already exists" — keep going so Ensure also
+		// recovers an installed-but-stopped service.
+		svcLog := slog.Default()
+		svcLog.Debug("service install (ensure) reported", "err", err)
+	}
+	return svc.Start()
+}
+
 // Stop asks SCM to stop the service.
 func Stop() error {
 	svc, _, err := new(Options{})

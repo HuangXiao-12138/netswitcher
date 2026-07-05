@@ -75,6 +75,7 @@ func newServiceCmd(version string) *cobra.Command {
 		},
 		newServiceRunCmd(version),
 		newServiceSCMCmd(),
+		newServiceEnsureCmd(),
 	)
 	return cmd
 }
@@ -159,6 +160,28 @@ func newServiceSCMCmd() *cobra.Command {
 				return err
 			}
 			return svcwrap.RunSCM(opts)
+		},
+	}
+}
+
+// newServiceEnsureCmd is the one-click setup the GUI's "start service" button
+// elevates to: install if absent, then start. Hidden because it's an internal
+// helper invoked via ShellExecute runas from the GUI banner.
+func newServiceEnsureCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:    "ensure",
+		Short:  "（GUI 内部）若未安装则安装，然后启动服务",
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts, err := serviceOpts()
+			if err != nil {
+				return err
+			}
+			if err := svcwrap.Ensure(opts); err != nil {
+				return fmt.Errorf("ensure: %w", err)
+			}
+			infof("NetSwitcher 服务已就绪")
+			return nil
 		},
 	}
 }

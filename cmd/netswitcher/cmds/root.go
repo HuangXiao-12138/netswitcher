@@ -34,6 +34,12 @@ func NewRoot(version string) *cobra.Command {
   dump                                        打印接口、配置、路由表（调试）
   ipc call <method> <json>                    命名管道自测`,
 		Version: version,
+		// Bare invocation (double-clicking the exe) opens the GUI so users get
+		// a window without learning subcommands. `--help` and subcommands are
+		// still handled by cobra before this RunE fires.
+		RunE: func(cmd *cobra.Command, args []string) error {
+			return runGUI()
+		},
 	}
 	root.PersistentFlags().StringVar(&gflags.configPath, "config", "",
 		"config.json 路径（默认 %ProgramData%\\NetSwitcher\\config.json）")

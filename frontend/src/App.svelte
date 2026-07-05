@@ -19,15 +19,17 @@
 
   let page: PageId = "status";
   let serviceUp = false;
+  let serviceInstalled = false;
   let checking = false;
   let status: StatusResponse | null = null;
 
   async function refreshServiceState() {
     checking = true;
     try {
-      serviceUp = await api.serviceAvailable();
-    } catch {
-      serviceUp = false;
+      // serviceInstalled is independent of the running IPC service — it
+      // queries SCM directly, so it works before the service ever starts.
+      serviceInstalled = await api.serviceInstalled().catch(() => false);
+      serviceUp = await api.serviceAvailable().catch(() => false);
     } finally {
       checking = false;
     }
@@ -36,7 +38,7 @@
   async function startService() {
     try {
       await api.startServiceElevated();
-      // Give SCM a moment, then re-check.
+      // Give the elevated process a moment, then re-check.
       setTimeout(refreshServiceState, 2500);
     } catch (e: any) {
       alert("无法启动服务： " + (e?.message ?? e));
@@ -81,10 +83,17 @@
 {#if !serviceUp}
   <div class="banner">
     <div class="banner-text">
-      <strong>NetSwitcher 服务未运行。</strong> 路由不会被维护。
-      <span class="faint">以管理员身份启动服务后即可恢复。</span>
+      {#if !serviceInstalled}
+        <strong>首次使用：</strong>安装并启动 NetSwitcher 服务后即可自动维护路由。
+        <span class="faint">仅此一次，之后开机自启。</span>
+      {:else}
+        <strong>NetSwitcher 服务未运行。</strong>路由不会被维护。
+        <span class="faint">点击启动服务。</span>
+      {/if}
     </div>
-    <button class="primary" on:click={startService}>以管理员身份启动服务</button>
+    <button class="primary" on:click={startService}>
+      {serviceInstalled ? "启动服务" : "安装并启动服务"}
+    </button>
   </div>
 {/if}
 

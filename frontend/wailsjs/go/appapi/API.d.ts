@@ -17,6 +17,7 @@ import type {
 } from "../models";
 
 export function ServiceAvailable(): Promise<boolean>;
+export function ServiceInstalled(): Promise<boolean>;
 export function StartServiceElevated(): Promise<void>;
 export function GetStatus(): Promise<StatusResponse>;
 export function GetConfig(): Promise<Config>;

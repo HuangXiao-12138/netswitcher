@@ -16,6 +16,10 @@ export function ServiceAvailable() {
   return window.go.appapi.API.ServiceAvailable();
 }
 
+export function ServiceInstalled() {
+  return window.go.appapi.API.ServiceInstalled();
+}
+
 export function StartServiceElevated() {
   return window.go.appapi.API.StartServiceElevated();
 }

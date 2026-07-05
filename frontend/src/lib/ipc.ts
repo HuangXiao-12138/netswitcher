@@ -2,6 +2,7 @@
 // and centralizes the call surface so pages don't import paths directly.
 import {
   ServiceAvailable,
+  ServiceInstalled,
   StartServiceElevated,
   GetStatus,
   GetConfig,
@@ -23,6 +24,7 @@ import {
 
 export const api = {
   serviceAvailable: () => ServiceAvailable(),
+  serviceInstalled: () => ServiceInstalled(),
   startServiceElevated: () => StartServiceElevated(),
   getStatus: () => GetStatus(),
   getConfig: () => GetConfig(),

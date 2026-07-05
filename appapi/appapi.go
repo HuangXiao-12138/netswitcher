@@ -22,6 +22,7 @@ import (
 	"github.com/netswitcher/netswitcher/internal/ipc"
 	"github.com/netswitcher/netswitcher/internal/logging"
 	"github.com/netswitcher/netswitcher/internal/routeengine"
+	svcwrap "github.com/netswitcher/netswitcher/internal/service"
 	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
@@ -67,6 +68,18 @@ func (a *API) OnStartup(ctx context.Context) {
 func (a *API) ServiceAvailable() bool {
 	_, err := a.client.Call(ipc.MethodGetStatus, struct{}{})
 	return err == nil
+}
+
+// ServiceInstalled reports whether the service is registered with SCM
+// (independent of whether it's currently running). Used by the banner to pick
+// the right button label: "安装并启动" vs "启动". Querying SCM status does not
+// require elevation.
+func (a *API) ServiceInstalled() bool {
+	st, err := svcwrap.Query()
+	if err != nil {
+		return false
+	}
+	return st.Installed
 }
 
 // ---------- Service control ----------
