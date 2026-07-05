@@ -29,8 +29,8 @@ if ($CliOnly) {
   Invoke "go build -ldflags `"-X main.version=$Version`" -o $Binary ./cmd/netswitcher"
 } else {
   # Wails needs the `desktop` build tag or its runtime shows a "missing build
-  # tags" error dialog instead of the app.
+  # tags" error dialog; -H windowsgui makes double-click not pop a console.
   $env:CGO_ENABLED = "1"
-  Invoke "go build -tags desktop,production -ldflags `"-X main.version=$Version`" -o $Binary ./cmd/netswitcher"
+  Invoke "go build -tags desktop,production -ldflags `"-X main.version=$Version -H windowsgui`" -o $Binary ./cmd/netswitcher"
 }
 Write-Host "✓ built $Binary"

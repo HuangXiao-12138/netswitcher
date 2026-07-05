@@ -151,13 +151,19 @@ func LevelFromString(s string) slog.Level {
 	}
 }
 
-// Configure sets up slog with JSON output to file (rotating) and stdout.
-// If logDir is empty, only stdout is used (handy for `service run` without
-// %ProgramData% write permission, e.g. tests).
+// Configure sets up slog with JSON output to file (rotating) and, if the
+// process has an interactive stdout (a real console), stdout too. GUI-
+// subsystem builds (-H windowsgui) have no console attached when double-
+// clicked; in that case stdout is skipped so we never write to an invalid
+// handle, and logging goes to the file + the pipe sink only.
+//
+// If logDir is empty, only stdout (when available) is used.
 // Returns a cleanup function the caller defers.
 func Configure(level string, logDir string) (cleanup func(), err error) {
 	var sinks []io.Writer
-	sinks = append(sinks, os.Stdout)
+	if stdoutIsConsole() {
+		sinks = append(sinks, os.Stdout)
+	}
 
 	cleanup = func() {}
 
@@ -179,6 +185,17 @@ func Configure(level string, logDir string) (cleanup func(), err error) {
 	}))
 	slog.SetDefault(logger)
 	return cleanup, nil
+}
+
+// stdoutIsConsole reports whether os.Stdout is a real terminal/console. On
+// Windows GUI-subsystem binaries launched by explorer, os.Stdout is an
+// invalid handle and Stat() returns an error or a non-char-device mode.
+func stdoutIsConsole() bool {
+	fi, err := os.Stdout.Stat()
+	if err != nil {
+		return false
+	}
+	return fi.Mode()&os.ModeCharDevice != 0
 }
 
 // teeWriter forwards bytes to the base writer and, if a pipe sink is

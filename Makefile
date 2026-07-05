@@ -3,7 +3,9 @@
 # with no C toolchain requirement.
 
 VERSION ?= 0.1.0
-LDFLAGS := -X main.version=$(VERSION)
+# -H windowsgui: GUI subsystem (no console window on double-click). CLI
+# subcommands re-attach to the parent console via winutil.AttachParentConsole.
+LDFLAGS := -X main.version=$(VERSION) -H windowsgui
 BINARY  := netswitcher.exe
 
 .PHONY: all build frontend build-cli test clean fmt help
