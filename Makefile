@@ -26,6 +26,11 @@ build-cli:
 frontend:
 	cd frontend && npm install && npm run build
 
+## icon: regenerate the Windows icon resource (.syso) from build/windows/icon.ico.
+##        Run after replacing the icon, then `make build`.
+icon:
+	rsrc -ico build/windows/icon.ico -arch amd64 -o cmd/netswitcher/resource.syso
+
 ## dev: run the Wails dev loop (hot reload).
 dev:
 	wails dev
