@@ -278,10 +278,10 @@
                       </td>
                       <td>
                         <div class="gw">
-                          <select class="cell gw-mode" value={gatewayMode(r.viaGateway)} on:change={(e) => setGatewayMode(i, e.currentTarget.value as "auto" | "custom")}>
-                            <option value="auto">auto（{resolvedGatewayFor(r.viaInterface) || "—"}）</option>
-                            <option value="custom">自定义 IP…</option>
-                          </select>
+                          <div class="seg">
+                            <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "auto"} on:click={() => setGatewayMode(i, "auto")} title="自动取该网卡当前网关">自动</button>
+                            <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "custom"} on:click={() => setGatewayMode(i, "custom")} title="手动指定网关 IP">指定</button>
+                          </div>
                           {#if gatewayMode(r.viaGateway) === "custom"}
                             <input class="cell mono gw-ip {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} placeholder="如 192.168.1.1" on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
                             {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
@@ -459,8 +459,12 @@
   .cell:focus { border-color: var(--accent); }
   .cell.invalid { border-color: var(--bad); }
   .gw { display: flex; align-items: center; gap: 6px; width: 100%; flex-wrap: wrap; }
-  .gw-mode { flex: 1 1 auto; min-width: 130px; }
-  .gw-ip { width: 120px; flex: 0 0 auto; }
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; flex: 0 0 auto; }
+  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; }
+  .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
+  .seg-btn:hover { color: var(--text); }
+  .seg-btn.active { background: var(--accent-dim); color: #fff; }
+  .gw-ip { width: 120px; flex: 1 1 auto; min-width: 90px; }
   .metric { width: 60px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .toggle-sw {
