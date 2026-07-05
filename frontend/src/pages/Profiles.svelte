@@ -177,16 +177,17 @@
   }
 </script>
 
-<div class="head">
-  <h2>配置</h2>
-  <button on:click={newProfile}>+ 新建配置</button>
-</div>
+<div class="profiles-page">
+  <div class="head">
+    <h2>配置</h2>
+    <button on:click={newProfile}>+ 新建配置</button>
+  </div>
 
-{#if errorText}
-  <div class="err">{errorText}</div>
-{/if}
+  {#if errorText}
+    <div class="err">{errorText}</div>
+  {/if}
 
-<div class="layout">
+  <div class="layout">
   <aside class="prof-list">
     {#each config?.profiles ?? [] as p}
       <button
@@ -200,7 +201,7 @@
         {/if}
       </button>
     {:else}
-      <div class="faint" style="padding:12px;font-size:12px">（空）</div>
+      <div class="faint" style="padding:12px;font-size:12px"></div>
     {/each}
   </aside>
 
@@ -312,7 +313,6 @@
       </div>
     {:else if (config?.profiles ?? []).length === 0}
       <div class="empty-state">
-        <div class="empty-icon">⇄</div>
         <h3>还没有路由配置</h3>
         <p class="muted">新建一个配置，添加"哪些网段走哪块网卡"的规则，<br />NetSwitcher 会自动维护，网络变化也会重新下发。</p>
         <button class="primary" on:click={newProfile}>+ 新建第一个配置</button>
@@ -321,6 +321,7 @@
       <p class="muted">从左侧选择一个配置查看或编辑。</p>
     {/if}
   </div>
+</div>
 </div>
 
 {#if pendingDelete}
@@ -344,11 +345,14 @@
 {/if}
 
 <style>
-  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  /* Page fills .content so the empty state can vertically center in the
+     available space (same pattern as Logs/Diagnostics). */
+  .profiles-page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-shrink: 0; }
   h2 { margin: 0; font-size: 18px; }
   h3 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-dim); }
-  .err { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); padding: 9px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; font-family: var(--font-mono); }
-  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; }
+  .err { background: rgba(248,113,113,0.08); border: 1px solid rgba(248,113,113,0.3); padding: 9px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 12px; font-family: var(--font-mono); flex-shrink: 0; }
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 16px; flex: 1; min-height: 0; }
   .prof-list { display: flex; flex-direction: column; gap: 2px; }
   .prof-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 8px 10px; background: transparent; border: 1px solid transparent; }
   .prof-item:hover { background: var(--bg-2); }
@@ -374,14 +378,13 @@
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
 
-  /* No-profiles empty state — centered in the editor area. */
+  /* No-profiles empty state — fills the editor area and centers. */
   .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; gap: 10px; padding: 48px 24px; min-height: 280px;
+    text-align: center; gap: 12px; padding: 32px 24px; min-height: 100%;
   }
-  .empty-icon { font-size: 44px; color: var(--accent); line-height: 1; opacity: 0.85; }
-  .empty-state h3 { margin: 0; font-size: 16px; color: var(--text); }
-  .empty-state p { margin: 0; font-size: 13px; line-height: 1.6; }
+  .empty-state h3 { margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); }
+  .empty-state p { margin: 0; font-size: 13px; line-height: 1.6; max-width: 420px; }
 
   /* Gateway cell: switch between "auto" (use NIC gateway) and a literal IP. */
   .gw { display: flex; flex-direction: column; gap: 3px; }
