@@ -27,6 +27,9 @@ import {
 import {
   EventsOn,
   EventsOff,
+  WindowMinimise,
+  WindowToggleMaximise,
+  WindowHide,
 } from "../../wailsjs/runtime/runtime";
 
 export const api = {
@@ -57,6 +60,13 @@ export const api = {
 export const events = {
   on: EventsOn,
   off: EventsOff,
+};
+
+// Window controls for the frameless custom title bar.
+export const wc = {
+  minimise: () => WindowMinimise(),
+  toggleMax: () => WindowToggleMaximise(),
+  hide: () => WindowHide(),
 };
 
 // Event names emitted by the backend.

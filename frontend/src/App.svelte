@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
-  import { api, events, EVT } from "./lib/ipc";
+  import { api, events, EVT, wc } from "./lib/ipc";
   import type { StatusResponse } from "../wailsjs/go/models";
   import Status from "./pages/Status.svelte";
   import Profiles from "./pages/Profiles.svelte";
@@ -94,20 +94,26 @@
 
 <header class="topbar">
   <div class="brand">
-    <span class="logo">⇄</span>
     <div class="brand-text">
       <span class="title">NetSwitcher</span>
       <span class="subtitle">内外网路由管理</span>
     </div>
   </div>
-  <div class="pills">
-    {#if !elevated}
-      <span class="pill down"><span class="dot"></span>未提权</span>
-    {:else if engineActive}
-      <span class="pill up"><span class="dot"></span>管理员·引擎在线</span>
-    {:else}
-      <span class="pill warn"><span class="dot"></span>引擎未启动</span>
-    {/if}
+  <div class="top-right">
+    <div class="pills">
+      {#if !elevated}
+        <span class="pill down"><span class="dot"></span>未提权</span>
+      {:else if engineActive}
+        <span class="pill up"><span class="dot"></span>管理员·引擎在线</span>
+      {:else}
+        <span class="pill warn"><span class="dot"></span>引擎未启动</span>
+      {/if}
+    </div>
+    <div class="win-ctrl">
+      <button class="win-btn" title="最小化" on:click={wc.minimise}><span class="ico-min"></span></button>
+      <button class="win-btn" title="最大化/还原" on:click={wc.toggleMax}><span class="ico-max"></span></button>
+      <button class="win-btn close" title="最小化到托盘" on:click={wc.hide}><span class="ico-close"></span></button>
+    </div>
   </div>
 </header>
 
@@ -180,19 +186,19 @@
 <style>
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 18px; border-bottom: 1px solid var(--border); background: var(--bg-1);
+    padding: 8px 0 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
     -webkit-app-region: drag;
   }
   .brand { display: flex; align-items: center; gap: 12px; }
-  .logo { font-size: 26px; color: var(--accent); line-height: 1; }
   .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
-  .title { font-weight: 700; font-size: 16px; }
+  .title { font-weight: 700; font-size: 15px; }
   .subtitle { font-size: 11px; color: var(--text-dim); }
+  .top-right { display: flex; align-items: center; gap: 14px; }
   .pills { display: flex; gap: 6px; }
   .pill {
     display: flex; align-items: center; gap: 7px;
     font-size: 12px; padding: 4px 11px; border-radius: 999px;
-    border: 1px solid var(--border); -webkit-app-region: no-drag;
+    border: 1px solid var(--border);
   }
   .pill .dot { width: 8px; height: 8px; border-radius: 50%; }
   .pill.up { color: var(--good); border-color: rgba(74,222,128,0.3); }
@@ -201,6 +207,28 @@
   .pill.down .dot { background: var(--bad); }
   .pill.warn { color: var(--warn); border-color: rgba(251,191,36,0.3); }
   .pill.warn .dot { background: var(--warn); }
+
+  /* Custom window controls (frameless). */
+  .win-ctrl { display: flex; align-items: stretch; -webkit-app-region: no-drag; }
+  .win-btn {
+    width: 40px; height: 32px; padding: 0; background: transparent;
+    border: none; border-radius: 0; color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .win-btn:hover { background: var(--bg-3); color: var(--text); }
+  .win-btn.close:hover { background: #e81123; color: #fff; }
+  .win-btn span { display: inline-block; }
+  .ico-min { width: 12px; height: 1px; background: currentColor; }
+  .ico-max { width: 11px; height: 11px; border: 1px solid currentColor; }
+  .ico-close {
+    width: 14px; height: 14px; position: relative;
+  }
+  .ico-close::before, .ico-close::after {
+    content: ""; position: absolute; left: 6px; top: 1px; width: 1.5px; height: 12px;
+    background: currentColor; border-radius: 1px;
+  }
+  .ico-close::before { transform: rotate(45deg); }
+  .ico-close::after { transform: rotate(-45deg); }
 
   .banner {
     display: flex; align-items: center; gap: 12px; padding: 10px 18px;

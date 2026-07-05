@@ -46,6 +46,10 @@ func Run(opts Options) error {
 		Height:    opts.Height,
 		MinWidth:  760,
 		MinHeight: 520,
+		// Frameless: we draw our own title bar (App.svelte .topbar) with
+		// custom min/max/close buttons. This removes the native title bar,
+		// so there's no more blank/default window icon in the title bar.
+		Frameless: true,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
