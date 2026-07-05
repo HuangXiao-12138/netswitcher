@@ -94,6 +94,17 @@
     editing = { ...editing, rules };
   }
 
+  // viaGateway accepts "auto" (use the NIC's primary gateway) or a literal
+  // IPv4. Empty counts as auto to match config.applyDefaults. The gateway
+  // cell uses this to switch between the two modes.
+  function isAutoGateway(gw: string): boolean {
+    return !gw || gw.toLowerCase() === "auto";
+  }
+
+  function resolvedGatewayFor(ifaceName: string): string {
+    return interfaces.find((ifc) => ifc.Name === ifaceName)?.Gateways?.[0] ?? "";
+  }
+
   async function save() {
     if (!editing) return;
     saving = true;
@@ -214,7 +225,7 @@
         </label>
       </div>
 
-      {#if editing.autoManageMetrics}
+      {#if editing.autoManageMetrics && editing.metricPolicy}
         <div class="form-row metric-policy">
           <label>
             首选网卡
@@ -257,7 +268,29 @@
                     </select>
                   </td>
                   <td>
-                    <input class="cell-input mono" value={r.viaGateway} on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
+                    <div class="gw">
+                      {#if isAutoGateway(r.viaGateway)}
+                        <div class="gw-auto">
+                          <span class="gw-resolved" title="用所选网卡的主网关">
+                            ↳ {resolvedGatewayFor(r.viaInterface) || "网卡无网关"}
+                          </span>
+                          <button class="seg" on:click={() => ruleField(i, "viaGateway", "")}>指定 IP</button>
+                        </div>
+                      {:else}
+                        <div class="gw-specify">
+                          <input
+                            class="cell-input mono {ruleErr(i, 'viaGateway') ? 'invalid' : ''}"
+                            placeholder="192.168.1.1"
+                            value={r.viaGateway}
+                            on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)}
+                          />
+                          <button class="seg" on:click={() => ruleField(i, "viaGateway", "auto")}>改自动</button>
+                        </div>
+                      {/if}
+                    </div>
+                    {#if !isAutoGateway(r.viaGateway) && ruleErr(i, "viaGateway")}
+                      <div class="field-err">{ruleErr(i, "viaGateway")}</div>
+                    {/if}
                   </td>
                   <td>
                     <input class="cell-input mono" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} />
@@ -319,7 +352,6 @@
   .form-row { display: flex; gap: 16px; margin-bottom: 12px; flex-wrap: wrap; }
   .form-row label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--text-dim); flex: 1; min-width: 180px; }
   .form-row label.check { flex-direction: row; align-items: center; gap: 8px; }
-  .small { padding: 4px 6px; font-size: 12px; min-width: 120px; }
   /* Rule-table inputs fill their cell instead of forcing min-width (which
      made the row wider than the table and spilled out). */
   .cell-input {
@@ -335,6 +367,22 @@
   .rules-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* Gateway cell: switch between "auto" (use NIC gateway) and a literal IP. */
+  .gw { display: flex; flex-direction: column; gap: 3px; }
+  .gw-auto, .gw-specify { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .gw-specify input { flex: 1; min-width: 0; }
+  .gw-resolved {
+    font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);
+    flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .seg {
+    padding: 3px 8px; font-size: 11px;
+    background: transparent; border: 1px solid var(--border);
+    color: var(--text-faint); border-radius: var(--radius-sm);
+    cursor: pointer; white-space: nowrap; flex-shrink: 0;
+  }
+  .seg:hover { color: var(--accent); border-color: var(--accent-dim); background: var(--bg-2); }
 
   /* Delete confirmation modal. */
   .modal-backdrop {

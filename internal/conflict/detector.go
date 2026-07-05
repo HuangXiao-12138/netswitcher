@@ -98,7 +98,11 @@ func (d *Detector) CheckVPN(snap ifacemgr.Snapshot, profileWantsDefault bool) []
 			Description: fmt.Sprintf("VPN 适配器在线: %s (%s)", ifc.Name, ifc.FriendlyName),
 		}
 		if profileWantsDefault {
-			c.Description += "；可能与默认路由管理冲突"
+			// Informational, not alarmist: we can't tell (cheaply) whether the
+			// VPN actually holds 0.0.0.0/0, so phrase as a heads-up.
+			c.Description += "；若它接管了默认路由，可能影响外网，请用诊断页 tracert 验证"
+		} else {
+			c.Description += "；不影响你配置的网段路由"
 		}
 		out = append(out, c)
 	}

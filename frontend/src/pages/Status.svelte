@@ -22,12 +22,23 @@
 
   $: last = status?.lastResult as ApplyResult | undefined;
   $: applied = last?.applied ?? [];
-  $: conflicts = (status?.conflicts ?? []) as Conflict[];
+  // Conflicts the user has dismissed this session (by type:interface sig).
+  // Reset implicitly when the process restarts. Reappears if the underlying
+  // conflict set changes (different signature).
+  let dismissed = new Set<string>();
+  $: allConflicts = (status?.conflicts ?? []) as Conflict[];
+  const conflictSig = (c: Conflict) => `${c.type}:${c.interface}`;
+  $: conflicts = allConflicts.filter((c) => !dismissed.has(conflictSig(c)));
   $: interfaces = (status?.interfaces ?? []) as Interface[];
 
   function stateTag(ifc: Interface) {
     if (!ifc.IsUp) return { cls: "bad", text: "已断开" };
     return { cls: "good", text: "已连接" };
+  }
+
+  function dismissConflict(c: Conflict) {
+    dismissed = new Set(dismissed);
+    dismissed.add(conflictSig(c));
   }
 </script>
 
@@ -46,15 +57,20 @@
 
 {#if conflicts.length > 0}
   <div class="conflicts">
-    <h3>冲突告警 ({conflicts.length})</h3>
+    <h3>网络提示 ({conflicts.length})</h3>
     {#each conflicts as c}
       <div class="conflict-row">
         <span class="tag {c.type === 'vpn_present' ? 'vpn' : 'warn'}">
           {c.type === "vpn_present" ? "VPN" : "外部覆盖"}
         </span>
-        <span>{c.description}</span>
+        <span class="conflict-text">{c.description}</span>
+        <button class="dismiss" title="本次会话不再显示" on:click={() => dismissConflict(c)}>×</button>
       </div>
     {/each}
+  </div>
+{:else if allConflicts.length > 0}
+  <div class="conflicts muted-bar">
+    已忽略 {allConflicts.length} 条提示（重启或网络变化后重新评估）。
   </div>
 {/if}
 
@@ -138,6 +154,10 @@
   h3 { margin: 18px 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .conflicts { background: rgba(192,132,252,0.06); border: 1px solid rgba(192,132,252,0.25); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
   .conflict-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
+  .conflict-text { flex: 1; }
+  .dismiss { background: transparent; border: none; color: var(--text-faint); font-size: 16px; line-height: 1; padding: 0 6px; cursor: pointer; }
+  .dismiss:hover { color: var(--text); }
+  .muted-bar { color: var(--text-faint); font-size: 12px; }
   .iface-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .iface.down { opacity: 0.6; }
   .iface-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
