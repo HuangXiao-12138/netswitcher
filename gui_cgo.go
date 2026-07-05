@@ -55,9 +55,14 @@ func Run(opts Options) error {
 			api.OnStartup(ctx) // wire event context + tray
 		},
 		// X button hides the window instead of quitting — the system tray
-		// menu's "退出" item is the real quit path. This is the standard
-		// always-on-utility behavior.
+		// menu's "退出" item is the real quit path. When a real quit is in
+		// progress (tray → 退出, or RelaunchElevated), OnBeforeClose must let
+		// the close proceed, otherwise the window never closes and the process
+		// becomes an orphan with no UI and no tray.
 		OnBeforeClose: func(ctx context.Context) (prevent bool) {
+			if api.IsQuitting() {
+				return false // allow the close — real shutdown
+			}
 			runtime.WindowHide(ctx)
 			slog.Info("window hidden to tray (X clicked); use tray → 退出 to quit")
 			return true

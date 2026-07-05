@@ -12,7 +12,11 @@
   let fieldErrors: Record<string, string> = {};
 
   $: activeId = config?.activeProfile ?? "";
-  $: selected = config?.profiles.find((p) => p.id === selectedId) ?? null;
+  // Double optional chaining: config.profiles can be null when the on-disk
+  // config has no profiles section (Go marshals a nil slice as `null`). A
+  // bare `config?.profiles.find` would throw `null.find is not a function`
+  // and break Svelte's reactivity for the whole app.
+  $: selected = config?.profiles?.find((p) => p.id === selectedId) ?? null;
 
   onMount(load);
 

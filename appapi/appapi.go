@@ -55,12 +55,18 @@ type API struct {
 	log       *slog.Logger
 	elevated  bool
 	logFan    *logFanout
-	IconBytes []byte // tray icon (.ico); set by the GUI layer before OnStartup
-	Version   string // build version; set by the GUI layer
+	IconBytes []byte      // tray icon (.ico); set by the GUI layer before OnStartup
+	Version   string      // build version; set by the GUI layer
+	quitting  atomic.Bool // true once a real quit is in progress (tray → 退出 / RelaunchElevated)
 
 	mu     sync.Mutex
 	cancel context.CancelFunc // cancels any active diag stream
 }
+
+// IsQuitting reports whether the app is in the middle of a real shutdown.
+// OnBeforeClose uses this to distinguish "user clicked X → hide" from
+// "tray → 退出 → let the close proceed".
+func (a *API) IsQuitting() bool { return a.quitting.Load() }
 
 // New returns an API. Whether the engine can actually modify routes depends
 // on IsElevated() — the frontend must guard non-elevated runs.
@@ -143,7 +149,9 @@ func (a *API) RelaunchElevated() error {
 	if err := winutil.RelaunchElevated(""); err != nil {
 		return err
 	}
-	// The elevated instance is starting via UAC; close this non-elevated one.
+	// The elevated instance is starting via UAC; let this one close so we
+	// don't end up with two windows. Arming quitting bypasses OnBeforeClose.
+	a.quitting.Store(true)
 	if a.ctx != nil {
 		go func() {
 			<-time.After(500 * time.Millisecond)
@@ -168,7 +176,11 @@ func (a *API) GetConfig() (config.Config, error) {
 	if a.core == nil {
 		return config.Config{}, errEngine
 	}
-	return *a.core.Config(), nil
+	cfg := *a.core.Config()
+	if cfg.Profiles == nil {
+		cfg.Profiles = []config.Profile{} // non-null so the frontend gets [] not null
+	}
+	return cfg, nil
 }
 
 // SaveConfig replaces the whole config (with validation) and re-applies.
@@ -401,7 +413,11 @@ func (a *API) applyNow() {
 	}
 }
 
+// quitApp is the tray "退出" handler: arm the quitting flag so OnBeforeClose
+// stops blocking, then ask Wails to shut down. The process actually exits
+// when wails.Run returns in gui.Run.
 func (a *API) quitApp() {
+	a.quitting.Store(true)
 	if a.ctx != nil {
 		runtime.Quit(a.ctx)
 	}

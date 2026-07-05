@@ -9,6 +9,9 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+	"unicode/utf8"
+
+	"golang.org/x/text/encoding/simplifiedchinese"
 
 	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
@@ -49,8 +52,13 @@ func Read(ctx context.Context) ([]Row, error) {
 	winutil.HideWindow(cmd) // no console flash from powershell.exe
 	out, err := cmd.Output()
 	if err != nil {
-		return nil, fmt.Errorf("Get-NetRoute: %w: %s", err, string(out))
+		return nil, fmt.Errorf("Get-NetRoute: %w: %s", err, decodeLocal(out))
 	}
+
+	// PowerShell 5.1 on Chinese Windows emits GBK; ConvertTo-Json strings carry
+	// GBK bytes for the interface aliases. json.Unmarshal expects UTF-8, so
+	// decode to UTF-8 when the bytes aren't already valid UTF-8.
+	out = []byte(decodeLocal(out))
 
 	// PowerShell emits a single object (not array) when there's exactly one
 	// route; normalize to an array.
@@ -73,3 +81,15 @@ const (
 	SourceSystem  Source = "system"  // non-managed, non-VPN
 	SourceSuspect Source = "suspect" // VPN / virtual adapter
 )
+
+// decodeLocal decodes GBK to UTF-8 when the input is not already valid UTF-8
+// (PowerShell 5.1 on Chinese Windows emits GBK for interface aliases).
+func decodeLocal(b []byte) string {
+	if utf8.Valid(b) {
+		return string(b)
+	}
+	if s, err := simplifiedchinese.GBK.NewDecoder().Bytes(b); err == nil {
+		return string(s)
+	}
+	return string(b)
+}
