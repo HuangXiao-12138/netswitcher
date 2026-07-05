@@ -24,6 +24,9 @@ func onReady(iconBytes []byte, onShow, onApply, onQuit func()) {
 	systray.SetTitle("")
 	systray.SetTooltip("NetSwitcher — 内外网路由管理")
 
+	// Left-click → show window; right-click → context menu (default).
+	systray.SetOnTapped(func() { safe(onShow, "show window (left-click)") })
+
 	mShow := systray.AddMenuItem("显示主窗口", "显示 NetSwitcher 主界面")
 	systray.AddSeparator()
 	mApply := systray.AddMenuItem("立即重新应用路由", "触发一次 apply")
