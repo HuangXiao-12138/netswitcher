@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, afterUpdate } from "svelte";
   import { api, events, EVT } from "../lib/ipc";
 
   type Level = "debug" | "info" | "warn" | "error";
@@ -9,11 +9,27 @@
   let subscribed = false;
   let loading = true;
 
+  // Auto-scroll-to-bottom that yields to manual scroll-up: stays pinned to the
+  // tail as new logs arrive, but if the user scrolls up to read history it
+  // stops fighting them; scrolling back to the bottom re-arms it.
+  let listEl: HTMLElement;
+  let autoScroll = true;
+
   const levels: Level[] = ["debug", "info", "warn", "error"];
   const levelRank: Record<string, number> = { debug: 0, info: 1, warn: 2, warning: 2, error: 3 };
 
   onMount(() => { subscribe(); });
   onDestroy(() => { try { events.off(EVT.logLine); } catch {} });
+
+  afterUpdate(() => {
+    if (listEl && autoScroll) listEl.scrollTop = listEl.scrollHeight;
+  });
+
+  function onScroll() {
+    if (!listEl) return;
+    const distFromBottom = listEl.scrollHeight - listEl.scrollTop - listEl.clientHeight;
+    autoScroll = distFromBottom < 30;
+  }
 
   async function subscribe() {
     try { events.off(EVT.logLine); } catch {}
@@ -22,6 +38,7 @@
     // e.g. startup apply), then start the live stream.
     loading = true;
     entries = [];
+    autoScroll = true;
     try {
       const lines = await api.recentLogs(500);
       for (const line of lines) onLine(line);
@@ -68,7 +85,7 @@
   </div>
 </div>
 
-<div class="card log-list" style="padding:8px">
+<div class="card log-list" bind:this={listEl} on:scroll={onScroll}>
   {#each visible as e}
     <div class="log-row">
       <span class="log-time">{e.time ? new Date(e.time).toLocaleTimeString() : ""}</span>
@@ -87,7 +104,14 @@
   .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
   h2 { margin: 0; font-size: 18px; }
   .controls { display: flex; gap: 8px; }
-  .log-list { max-height: 65vh; overflow: auto; background: #07090d; }
+  /* Fill the viewport instead of capping at 65vh (which left a large gap below).
+     170px ≈ window title bar + content padding + the head row above. */
+  .log-list {
+    height: calc(100vh - 170px);
+    min-height: 220px;
+    overflow: auto;
+    background: #07090d;
+  }
   .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 2px 6px; font-size: 12px; }
   .log-row:hover { background: var(--bg-1); }
   .log-time { color: var(--text-faint); font-family: var(--font-mono); width: 70px; flex-shrink: 0; }
