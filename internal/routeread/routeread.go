@@ -26,12 +26,13 @@ type Row struct {
 }
 
 // script returns the PowerShell that emits one JSON array of IPv4 routes.
-// -NoProfile avoids loading the user profile (§14 PowerShell policy).
-// -ExecutionPolicy Bypass overrides restrictive policies.
+// Note: NO -AsArray on ConvertTo-Json — that flag is PowerShell 6+ only and
+// the stock Windows powershell.exe (5.1) rejects it. We normalize a single
+// object back into an array in Go instead.
 func script() string {
 	return `Get-NetRoute -AddressFamily IPv4 ` +
 		`| Select-Object DestinationPrefix,NextHop,InterfaceIndex,InterfaceAlias,RouteMetric,InterfaceMetric ` +
-		`| ConvertTo-Json -AsArray`
+		`| ConvertTo-Json -Compress`
 }
 
 // Read returns the current IPv4 route table. Times out after 8s.

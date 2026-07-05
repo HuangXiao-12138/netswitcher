@@ -51,25 +51,28 @@
       autoManageMetrics: true,
       metricPolicy: { preferredMetric: 10, othersMetric: 50 },
     };
-    config?.profiles.push(p);
+    // Reassign (not push) so Svelte sees the change and re-renders the list.
+    config = { ...(config ?? { version: 1, activeProfile: "", profiles: [] }), profiles: [...(config?.profiles ?? []), p] };
     selectedId = id;
-    prepareEditing();
   }
 
   function addRule() {
     if (!editing) return;
-    editing.rules = [
-      ...editing.rules,
-      {
-        id: "r" + (editing.rules.length + 1) + "-" + Math.random().toString(36).slice(2, 6),
-        destination: "10.0.0.0/24",
-        viaInterface: interfaces[0]?.Name ?? "",
-        viaGateway: "auto",
-        metric: 1,
-        enabled: true,
-      },
-    ];
-    editing = { ...editing };
+    // Reassign the array (not push) so Svelte re-renders the rule table.
+    editing = {
+      ...editing,
+      rules: [
+        ...editing.rules,
+        {
+          id: "r" + (editing.rules.length + 1) + "-" + Math.random().toString(36).slice(2, 6),
+          destination: "10.0.0.0/24",
+          viaInterface: interfaces[0]?.Name ?? "",
+          viaGateway: "auto",
+          metric: 1,
+          enabled: true,
+        },
+      ],
+    };
   }
 
   function removeRule(idx: number) {
