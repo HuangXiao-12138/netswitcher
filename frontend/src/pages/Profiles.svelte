@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "../lib/ipc";
+  import Select from "../components/Select.svelte";
   import type { Config, Profile, Rule, Interface } from "../../wailsjs/go/models";
 
   let config: Config | null = null;
@@ -293,9 +294,11 @@
                         {#if ruleErr(i, "destination")}<div class="field-err">{ruleErr(i, "destination")}</div>{/if}
                       </td>
                       <td>
-                        <select class="cell" value={r.viaInterface} on:change={(e) => ruleField(i, "viaInterface", e.currentTarget.value)}>
-                          {#each interfaces as ifc}<option value={ifc.Name} selected={ifc.Name === r.viaInterface}>{ifc.Name}</option>{/each}
-                        </select>
+                        <Select
+                          options={interfaces.map((ifc) => ({ value: ifc.Name, label: ifc.Name }))}
+                          value={r.viaInterface}
+                          on:change={(e) => ruleField(i, "viaInterface", e.detail)}
+                        />
                       </td>
                       <td>
                         <div class="seg">
@@ -334,10 +337,11 @@
             <div class="adv-row">
               <div class="label">默认路由网卡<small>defaultRouteInterface</small></div>
               <div class="control">
-                <select bind:value={editing.defaultRouteInterface}>
-                  <option value="">（不管理默认路由）</option>
-                  {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name} ({ifc.MediaType})</option>{/each}
-                </select>
+                <Select
+                  options={[{ value: "", label: "（不管理默认路由）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: `${ifc.Name} (${ifc.MediaType})` }))]}
+                  value={editing.defaultRouteInterface}
+                  on:change={(e) => (editing.defaultRouteInterface = e.detail)}
+                />
               </div>
             </div>
             <div class="adv-row">
@@ -353,10 +357,13 @@
             <div class="adv-row">
               <div class="label">首选网卡 + metric<small>preferredInterface / preferredMetric / othersMetric</small></div>
               <div class="control">
-                <select bind:value={editing.metricPolicy.preferredInterface}>
-                  <option value="">（用默认路由网卡）</option>
-                  {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name}</option>{/each}
-                </select>
+                <div style="flex:1; min-width:160px">
+                  <Select
+                    options={[{ value: "", label: "（用默认路由网卡）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: ifc.Name }))]}
+                    value={editing.metricPolicy.preferredInterface}
+                    on:change={(e) => (editing.metricPolicy.preferredInterface = e.detail)}
+                  />
+                </div>
                 <span class="mini">preferred</span>
                 <input class="num" type="number" min="1" bind:value={editing.metricPolicy.preferredMetric} />
                 <span class="mini">others</span>

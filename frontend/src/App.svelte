@@ -274,7 +274,7 @@
     display: flex; flex-direction: column; gap: 2px;
   }
   .nav-item {
-    display: flex; align-items: center; gap: 10px;
+    display: flex; align-items: center; justify-content: flex-start; gap: 10px;
     background: transparent; border: 1px solid transparent;
     text-align: left; padding: 9px 11px; border-radius: var(--radius-sm);
     color: var(--text-dim); line-height: 1; width: 100%;

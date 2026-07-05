@@ -119,15 +119,18 @@ select {
 .toggle-sw:not(.off) { background: var(--good); }
 .toggle-sw:not(.off)::after { transform: translateX(13px); }
 
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: var(--comp-radius); overflow: hidden; }
+/* Segmented control — one continuous bar; segments share the container's
+   radius, no inner dividers, active = subtle bg-2 fill (theme-a). Matches
+   the components-showcase variant A. */
+.seg { display: inline-flex; background: transparent; border: 1px solid var(--border); border-radius: var(--comp-radius); overflow: hidden; }
 .seg-btn {
-  background: var(--bg-0); border: none; color: var(--text-dim);
-  padding: 5px 11px; font-size: 12px; cursor: pointer;
-  font-family: var(--comp-font); line-height: 1.2; white-space: nowrap;
+  background: transparent; border: none; color: var(--text-faint);
+  padding: 6px 15px; font-size: 12.5px; cursor: pointer;
+  font-family: var(--comp-font); line-height: 1; white-space: nowrap;
+  transition: color 120ms, background 120ms;
 }
-.seg-btn + .seg-btn { border-left: 1px solid var(--border); }
 .seg-btn:hover { color: var(--text); }
-.seg-btn.active { background: var(--accent-dim); color: #fff; }
+.seg-btn.active { background: var(--bg-2); color: var(--text); font-weight: 500; }
 
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--border-soft); }
@@ -173,7 +176,7 @@ tr:hover td { background: rgba(95, 184, 255, 0.04); }
 [data-theme="b"] button.primary:hover { background: #60a5fa; border-color: #60a5fa; }
 [data-theme="b"] input:hover, [data-theme="b"] select:hover { border-color: var(--text-faint); }
 [data-theme="b"] .tag { border-radius: 4px; }            /* squarer chips */
-[data-theme="b"] .seg-btn.active { background: var(--bg-2); color: var(--text); font-weight: 600; }
+[data-theme="b"] .seg-btn.active { background: transparent; color: var(--text); font-weight: 600; }
 
 /* ════════════════════════════════════════════════════════
    Theme C · 终端主题 — mono font, tiny radius, cyan glow,
@@ -201,5 +204,6 @@ tr:hover td { background: rgba(95, 184, 255, 0.04); }
 [data-theme="c"] .toggle-sw { border-radius: 2px; }
 [data-theme="c"] .toggle-sw:not(.off) { background: rgba(95, 184, 255, 0.15); box-shadow: 0 0 8px rgba(95, 184, 255, 0.2); }
 [data-theme="c"] .tag { border-radius: 2px; font-family: var(--font-mono); background: #0d1017; }
+[data-theme="c"] .seg { background: #0d1017; }
 [data-theme="c"] .seg-btn { font-family: var(--font-mono); letter-spacing: 0.02em; }
 [data-theme="c"] .seg-btn.active { background: rgba(95, 184, 255, 0.12); color: var(--accent); }
