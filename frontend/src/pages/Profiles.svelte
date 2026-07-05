@@ -340,7 +340,7 @@
                 <Select
                   options={[{ value: "", label: "（不管理默认路由）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: `${ifc.Name} (${ifc.MediaType})` }))]}
                   value={editing.defaultRouteInterface}
-                  on:change={(e) => (editing.defaultRouteInterface = e.detail)}
+                  on:change={(e) => (editing = { ...editing, defaultRouteInterface: e.detail })}
                 />
               </div>
             </div>
@@ -361,7 +361,7 @@
                   <Select
                     options={[{ value: "", label: "（用默认路由网卡）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: ifc.Name }))]}
                     value={editing.metricPolicy.preferredInterface}
-                    on:change={(e) => (editing.metricPolicy.preferredInterface = e.detail)}
+                    on:change={(e) => (editing = { ...editing, metricPolicy: { ...editing.metricPolicy!, preferredInterface: e.detail } })}
                   />
                 </div>
                 <span class="mini">preferred</span>

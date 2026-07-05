@@ -20,7 +20,7 @@
   let menuEl: HTMLDivElement;
   let menuStyle = "";
 
-  const current = () => options.find((o) => o.value === value);
+  $: current = options.find((o) => o.value === value);
 
   function placeMenu() {
     if (!triggerEl) return;
@@ -28,33 +28,30 @@
     const spaceBelow = window.innerHeight - r.bottom - 8;
     const spaceAbove = r.top - 8;
     const menuMax = 280;
-    // Flip upward when there's more room above the trigger than below.
-    let top: number, maxH: number;
+    // Downward if enough space; otherwise flip up using `bottom` so the
+    // menu's bottom edge sits flush above the trigger regardless of its
+    // actual content height (no gap).
     if (spaceBelow >= Math.min(menuMax, 120) || spaceBelow >= spaceAbove) {
-      top = r.bottom + 4;
-      maxH = Math.min(menuMax, spaceBelow);
+      const maxH = Math.min(menuMax, spaceBelow);
+      menuStyle = `position: fixed; top: ${r.bottom + 4}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
     } else {
-      maxH = Math.min(menuMax, spaceAbove);
-      top = r.top - 4 - maxH;
+      const maxH = Math.min(menuMax, spaceAbove);
+      // Pin the menu's bottom edge to 4px above the trigger.
+      const bottomOffset = window.innerHeight - r.top + 4;
+      menuStyle = `position: fixed; bottom: ${bottomOffset}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
     }
-    menuStyle = `position: fixed; top: ${Math.max(4, top)}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
-  }
-  function openMenu() {
-    if (disabled) return;
-    placeMenu();
-    open = true;
   }
   function toggle() {
-    if (open) open = false;
-    else openMenu();
+    if (disabled) return;
+    if (open) { open = false; return; }
+    placeMenu();
+    open = true;
   }
   function pick(o: SelectOption) {
     value = o.value;
     open = false;
     dispatch("change", o.value);
   }
-  // Portal action: move the menu node to <body> so it's outside the table's
-  // DOM subtree (and any overflow / stacking-context traps there).
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
     return { destroy() { node.remove(); } };
@@ -66,19 +63,24 @@
     if (menuEl?.contains(t)) return;
     open = false;
   }
-  function onScroll() { if (open) open = false; } // close on any scroll (nested included)
+  // Close on scroll — but NOT when the scroll originates from inside the menu
+  // itself (the menu has its own overflow:auto for long option lists).
+  function onScroll(e: Event) {
+    if (!open) return;
+    if (menuEl?.contains(e.target as Node)) return;
+    open = false;
+  }
   function onKey(e: KeyboardEvent) { if (e.key === "Escape") open = false; }
   onMount(() => {
     document.addEventListener("click", onDocClick, true);
     document.addEventListener("scroll", onScroll, true);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", onScroll);
+    window.addEventListener("resize", () => { if (open) open = false; });
   });
   onDestroy(() => {
     document.removeEventListener("click", onDocClick, true);
     document.removeEventListener("scroll", onScroll, true);
     document.removeEventListener("keydown", onKey);
-    window.removeEventListener("resize", onScroll);
   });
 </script>
 
@@ -92,7 +94,7 @@
     aria-haspopup="listbox"
     aria-expanded={open}
   >
-    <span class="ns-sel-label">{current()?.label || placeholder || "—"}</span>
+    <span class="ns-sel-label">{current?.label || placeholder || "—"}</span>
     <span class="ns-sel-caret" class:open></span>
   </button>
 </div>
@@ -143,11 +145,8 @@
   }
   .ns-sel-caret.open { transform: rotate(180deg); }
 
-  /* Menu — rendered in <body> (portal) + position: fixed (inline style), so
-     no parent overflow clips it. z-index high to sit above the table. */
   :global(.ns-sel-menu) {
-    z-index: 1000;
-    max-height: 280px; overflow: auto;
+    z-index: 1000; overflow: auto;
     background: var(--bg-1); border: 1px solid var(--border);
     border-radius: var(--comp-radius);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
@@ -155,7 +154,7 @@
     display: flex; flex-direction: column; gap: 1px;
   }
   :global(.ns-sel-opt) {
-    text-align: left; width: 100%;
+    text-align: left; width: 100%; flex-shrink: 0;
     background: transparent; border: none; color: var(--text-dim);
     padding: 7px 10px; border-radius: calc(var(--comp-radius) - 2px);
     cursor: pointer; font-family: var(--comp-font); font-size: 13px; line-height: 1.2;
