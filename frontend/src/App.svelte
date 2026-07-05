@@ -187,7 +187,10 @@
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
     padding: 8px 0 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
-    -webkit-app-region: drag;
+    /* Wails frameless drag uses the --wails-draggable CSS property (NOT
+       -webkit-app-region). Any descendant that should be clickable must
+       override it to a non-"drag" value. */
+    --wails-draggable: drag;
   }
   .brand { display: flex; align-items: center; gap: 12px; }
   .brand-text { display: flex; flex-direction: column; line-height: 1.15; }
@@ -208,12 +211,14 @@
   .pill.warn { color: var(--warn); border-color: rgba(251,191,36,0.3); }
   .pill.warn .dot { background: var(--warn); }
 
-  /* Custom window controls (frameless). */
-  .win-ctrl { display: flex; align-items: stretch; -webkit-app-region: no-drag; }
+  /* Custom window controls (frameless). Override the inherited drag property
+     so the buttons are clickable, not drag-handles. */
+  .win-ctrl { display: flex; align-items: stretch; --wails-draggable: no-drag; }
   .win-btn {
     width: 40px; height: 32px; padding: 0; background: transparent;
     border: none; border-radius: 0; color: var(--text-dim);
     display: flex; align-items: center; justify-content: center;
+    --wails-draggable: no-drag;
   }
   .win-btn:hover { background: var(--bg-3); color: var(--text); }
   .win-btn.close:hover { background: #e81123; color: #fff; }
