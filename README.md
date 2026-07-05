@@ -2,103 +2,104 @@
 
 内外网路由管理工具 —— 让 Windows 双网卡（内网以太网 + 外网 Wi-Fi）按网段自动分流，并常驻维护。
 
-> 本仓库按 `docs/NetSwitcher-技术方案.md` 的 Phase 0–7 实现。**Phase 0–7 全部完成。**
+> 实现规格见 `docs/NetSwitcher-技术方案.md`，使用说明见 `docs/USER-MANUAL.md`。
+> 注意：当前架构与方案文档的"Windows 服务 + IPC"不同（已演化为"GUI 内嵌引擎 + 托盘"），见下文。
 
 ## 解决什么问题
 
-机器同时连着内网（以太网，无 Internet）和外网（Wi-Fi，有 Internet）时，让指定网段（如 `168.168.0.0/16` 内网、`172.16.0.0/16` 终端）走以太网，其余流量（含默认路由）走 Wi-Fi。手动 `route -p` 在 Wi-Fi 重连、网卡 index 变化、DHCP 续约后经常失效；NetSwitcher 用常驻服务监听网络变化、自动重新下发 runtime 路由（**绝不带 `-p`**），并把"哪些网段走哪块网卡"的规则做成图形配置。
+机器同时连着内网（以太网，无 Internet）和外网（Wi-Fi，有 Internet）时，让指定网段（如 `168.168.0.0/16` 内网、`172.16.0.0/16` 终端）走以太网，其余流量（含默认路由）走 Wi-Fi。手动 `route -p` 在 Wi-Fi 重连、网卡 index 变化、DHCP 续约后经常失效；NetSwitcher 用一个常驻 GUI 进程监听网络变化、自动重新下发 runtime 路由（**绝不带 `-p`**）。
 
-## 单二进制多角色
+## 架构（当前）
 
 ```
-netswitcher.exe service install|uninstall|start|stop|run   # Windows 服务
-netswitcher.exe gui                                         # 桌面 GUI
-netswitcher.exe apply [--dry-run]                           # 应用一次后退出（调试）
-netswitcher.exe dump                                        # 打印接口/配置（调试）
-netswitcher.exe ipc call <method> [json]                    # 命名管道自测（隐藏）
-netswitcher.exe --help
+netswitcher.exe（提权运行，单进程）
+├── Wails GUI（无边框自绘顶栏 + 系统托盘 + 单实例锁）
+├── core 路由引擎（直接在进程内，调 route.exe / netsh）
+├── netwatch（2s 轮询，网络变化自动 1500ms 去抖重下发）
+├── Job Object（父进程退出，所有子进程 webview2/route/ping 一起回收）
+└── 任务计划（可选，登录时自动以管理员启动，免 UAC）
 ```
 
-服务运行时还监听命名管道 `\\.\pipe\NetSwitcher`（行分隔 JSON 协议）。
+- **没有 Windows 服务**：路由引擎跑在 GUI 进程里，GUI 关闭（X → 缩托盘）后进程仍存活继续维护路由；从托盘"退出"才结束。
+- **路由修改需要管理员权限**：GUI 必须提权运行。首次启动检测到非提权会弹"以管理员身份重启"；建议设置"开机自启"（任务计划"最高权限"，登录自动提权，免每次 UAC）。
+- **代价**：只在你登录之后维护路由（登录界面 / 注销时不工作）—— 对个人台式机一般无所谓。
 
-## 快速开始
+## 构建
 
-### 从源码构建
-
-依赖：**Go 1.22+**、**Node.js 18+**、**MinGW-w64 (gcc)**（仅完整 GUI 构建需要）。
+依赖：**Go 1.22+**、**Node.js 18+**、**MinGW-w64 (gcc)**（CGO，链接 WebView2）。
 
 ```bash
-make build          # 完整构建：npm build + CGO go build → netswitcher.exe
-make build-cli      # 仅服务/CLI（CGO_ENABLED=0，无需 gcc）
+make build          # npm build + CGO go build → netswitcher.exe（~18MB，含 GUI）
+make build-cli      # 仅服务/CLI（CGO_ENABLED=0，无需 gcc，无 GUI）
 make test           # 单测（含 -race）
-make dev            # Wails 热重载开发
+make icon           # 从 build/windows/icon.ico 重新生成 resource.syso（换图标后跑）
 ```
 
 Windows PowerShell：`.\build.ps1`（完整）或 `.\build.ps1 -CliOnly`。
 
-> Wails 的绑定生成器在某些 MinGW 工具链下其临时 `wailsbindings.exe` 会被 Windows 加载器拒绝（已知 CGO 工具链怪癖）。本仓库的 `frontend/wailsjs/` 已手写完成，`make build` 直接走 `go build`，不依赖 `wails build`/`wails generate`。
+> **构建要点**（坑都踩过，记在 `.claude` 项目记忆里）：
+> - GUI 必须带 `-tags desktop,production`，否则 Wails 运行时弹"missing build tags"错误框。
+> - 必须带 `-ldflags "-H windowsgui"`，否则双击弹黑控制台。
+> - `wails generate` / `wails build` 在某些 MinGW 工具链下其临时 `wailsbindings.exe` 会被 Windows 加载器拒绝；`frontend/wailsjs/` 是**手写并提交**的，`make build` 直接走 `go build`，不依赖 `wails` CLI。
+> - exe 图标通过 `rsrc` 把 `build/windows/icon.ico` 编进 `cmd/netswitcher/resource.syso`（`make icon` 重生成）。
 
-### 安装为服务（需管理员）
+## 使用
 
-```powershell
-.\netswitcher.exe service install   # 注册为开机自启服务（自动重启 on failure）
-.\netswitcher.exe service start
-.\netswitcher.exe gui               # 打开配置/诊断界面
+### 双击启动（推荐）
+
+1. 双击 `netswitcher.exe` → 打开 GUI。
+2. 首次：检测到未提权 → 弹"以管理员身份重启"→ 点同意 → UAC → 提权重启 → 全功能可用。
+3. 进"设置"页 → 开"开机自启"→ 之后登录自动以管理员启动，免 UAC。
+4. 在"配置"页加规则（目标 CIDR + 接口 + 网关）→ 保存 → 设为活动。
+5. 关窗口（✕）→ 缩到系统托盘，进程继续维护路由；托盘右键"退出"才真正结束。
+
+### 命令行（调试/高级）
+
+```
+netswitcher.exe                       # 打开 GUI（双击等同）
+netswitcher.exe gui                   # 同上
+netswitcher.exe apply [--dry-run]     # 读 config 应用一次后退出
+netswitcher.exe dump                  # 打印接口/配置（调试）
+netswitcher.exe ipc call <method> [json]   # 命名管道自测（隐藏，遗留）
+netswitcher.exe service install|uninstall  # 遗留：旧的服务模式（kardianos），GUI 不再使用
+netswitcher.exe --help
 ```
 
-卸载：
-
-```powershell
-.\netswitcher.exe service stop
-.\netswitcher.exe service uninstall
-```
-
-或使用 NSIS 安装包（`makensis build/windows/installer.nsi` 生成 `dist/NetSwitcher-Setup.exe`）。
-
-## 配第一条规则
-
-1. 启动 GUI（`netswitcher.exe gui`）。
-2. 进入 **配置** 页 → **+ 新建配置**。
-3. 在规则表里加一行：
-   - 目标 CIDR：`168.168.0.0/16`
-   - 接口：选你的内网网卡（如"以太网"）
-   - 网关：`auto`（自动取该网卡当前默认网关）
-   - 启用：勾选
-4. （可选）设置 **默认路由网卡** 为 Wi-Fi，让其它流量走外网。
-5. **保存** → **设为活动**。3 秒内 **状态** 页会反映变化。
+> 从 cmd / PowerShell 跑 CLI 命令时输出正常显示；从 Git Bash（mintty）跑看不到输出（AttachConsole 接不上伪终端）。
 
 ## 数据目录
 
 `%ProgramData%\NetSwitcher\`：`config.json`（配置）、`state.json`（上次下发的路由）、`logs\netswitcher.log`（按天滚动，保留 7 天）。
 
+## 页面
+
+| 页 | 功能 |
+|---|---|
+| 状态 | 接口卡片（up/down、IPv4、网关、类型）、已下发路由表、"立即重新应用"、冲突告警（VPN/外部覆盖）、跳过/错误列表 |
+| 配置 | profile 列表 + 规则表编辑（CIDR / 接口下拉 / 网关 / metric / 启用）、默认路由网卡、metric 策略、字段级校验 |
+| 路由表 | `Get-NetRoute` 全表，按来源着色（🟢本工具 / 🟣疑似VPN / ⚪系统），可搜索 |
+| 诊断 | ping / tracert 流式输出，可停止 |
+| 日志 | 实时日志流 + 级别筛选 + 关键词过滤 |
+| 设置 | 开机自启开关、日志级别（运行时切换 + 持久化）、重新应用、打开日志目录、版本/路径 |
+
 ## 常见问题：路由没生效怎么排查
 
-1. **服务在跑吗？** GUI 顶栏应显示"服务在线"。若否，点横幅里的"以管理员身份启动服务"。
-2. **规则被跳过？** 状态页底部"跳过的规则"会写明原因：
-   - `interface not found`：接口名拼错，或网卡当前未连接（等连上后自动重试）。
-   - `no IPv4 gateway on …`：DHCP 还没拿到网关（重连后自动重试）。
-3. **冲突？** 状态页顶部"冲突告警"会标出 VPN 适配器或外部覆盖（NetSwitcher 不会主动覆盖 VPN 路由）。
-4. **实际走哪？** 诊断页 `tracert <目标>` 看第一跳；路由表页按来源着色（本工具/系统/疑似 VPN）。
-5. **看日志：** 日志页实时滚动，或打开 `%ProgramData%\NetSwitcher\logs\netswitcher.log`。每条 apply 都记录 `reason`（startup / network_change / config_change）。
-
-## 进度
-
-| Phase | 内容 | 状态 |
-|---|---|---|
-| 0 | 项目骨架与构建 | ✅ |
-| 1 | 配置 + 接口枚举 | ✅ |
-| 2 | 路由引擎 | ✅ |
-| 3 | 网络监听 + 自动应用 | ✅ |
-| 4 | Windows 服务化 | ✅ |
-| 5 | IPC（命名管道） | ✅ |
-| 6 | GUI（Wails + Svelte） | ✅ |
-| 7 | 打包与收尾 | ✅ |
-
-详细技术决策见 `docs/NetSwitcher-技术方案.md`，使用说明见 `docs/USER-MANUAL.md`。
+1. **提权了吗？** 顶栏药丸应显示"管理员·引擎在线"。否则设置页或弹窗走"以管理员身份重启"。
+2. **规则被跳过？** 状态页底部"跳过的规则"写明原因（接口未连接、无网关）—— 网卡连上后自动重试。
+3. **冲突？** 状态页顶部标出 VPN 适配器 / 外部覆盖（本工具不主动覆盖 VPN）。
+4. **实际走哪？** 诊断页 `tracert <目标>` 看第一跳。
+5. **看日志**：日志页实时滚动，或 `%ProgramData%\NetSwitcher\logs\netswitcher.log`。每条 apply 记录 `reason`（startup / network_change / config_change / gui）。
 
 ## 测试
 
-`go test -race ./...` 覆盖配置校验、接口名匹配、路由 diff/apply、网络变化检测、防抖、IPC 协议/扇出、服务配置。VM 双网卡集成测试矩阵见方案 §13.2。
+`go test -race ./...` 覆盖配置校验、接口名匹配、路由 diff/apply、网络变化检测、去抖、IPC 协议、日志扇出、服务配置。VM 双网卡集成测试矩阵见方案 §13.2。
+
+## 已知边界
+
+- 仅 Windows 10/11 x64（用 WebView2；Win10 需装运行时，Win11 自带）。
+- 仅 IPv4（IPv6 字段预留但不处理）。
+- 不与 VPN 客户端深度集成（只检测冲突、告警）。
+- 嵌入式架构只在用户登录后维护路由（登录前 / 注销时不工作）。
 
 ## 许可
 
