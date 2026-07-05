@@ -26,9 +26,14 @@ build-cli:
 frontend:
 	cd frontend && npm install && npm run build
 
-## icon: regenerate the Windows icon resource (.ico + .syso) from source.
-##        Draws a 32-bit multi-size ICO (Go generator) then compiles to syso.
+## icon: compile build/windows/icon.ico into resource.syso (exe icon).
+##        Use this when you've replaced icon.ico with your own .ico.
 icon:
+	rsrc -ico build/windows/icon.ico -arch amd64 -o cmd/netswitcher/resource.syso
+
+## icon-gen: regenerate build/windows/icon.ico from the Go generator (the
+##           default dark-navy double-arrow design). Overwrites icon.ico.
+icon-gen:
 	go run build/windows/generate-icon.go
 	rsrc -ico build/windows/icon.ico -arch amd64 -o cmd/netswitcher/resource.syso
 
