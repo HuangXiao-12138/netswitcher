@@ -8,20 +8,31 @@ The electron alternative for Go
 (c) Lea Anthony 2019-present
 */
 
-// Hand-written bindings (Wails' generator could not run on this toolchain).
-// Wails injects window.go.<package>.<Type>.<Method> at runtime; these wrappers
-// just give the frontend typed call sites. Each returns a Promise.
+// Hand-written bindings. Wails injects window.go.<package>.<Type>.<Method> at
+// runtime; these wrappers give the frontend typed call sites.
 
-export function ServiceAvailable() {
-  return window.go.appapi.API.ServiceAvailable();
+export function IsElevated() {
+  return window.go.appapi.API.IsElevated();
 }
 
-export function ServiceInstalled() {
-  return window.go.appapi.API.ServiceInstalled();
+export function EngineActive() {
+  return window.go.appapi.API.EngineActive();
 }
 
-export function StartServiceElevated() {
-  return window.go.appapi.API.StartServiceElevated();
+export function RelaunchElevated() {
+  return window.go.appapi.API.RelaunchElevated();
+}
+
+export function AutoStartInstalled() {
+  return window.go.appapi.API.AutoStartInstalled();
+}
+
+export function InstallAutoStart() {
+  return window.go.appapi.API.InstallAutoStart();
+}
+
+export function UninstallAutoStart() {
+  return window.go.appapi.API.UninstallAutoStart();
 }
 
 export function GetStatus() {

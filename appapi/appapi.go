@@ -1,11 +1,12 @@
-// Package appapi is the Wails-bound surface the frontend talks to. Per the
-// spec (§8.2) the GUI process never calls route.exe directly — every method
-// proxies to the running service via the IPC client.
+// Package appapi is the Wails-bound surface the frontend talks to.
 //
-// Streaming methods (Ping / Tracert / SubscribeLogs) launch a background
-// reader that pushes lines to the frontend via Wails events; the frontend
-// subscribes with the events API. This avoids returning Go channels across
-// the JS bridge.
+// Architecture (post-refactor): the route engine runs IN the GUI process —
+// appapi holds a *core.Core directly and calls its methods. No Windows
+// service, no named-pipe IPC. The GUI process must be elevated to modify
+// routes (route.exe needs admin); if it isn't, appapi runs read-only and the
+// frontend offers to relaunch elevated. Auto-start at login is configured via
+// a scheduled task (Task Scheduler, "highest privileges") so a normal login
+// relaunches the elevated GUI without a UAC prompt.
 package appapi
 
 import (
@@ -13,145 +14,161 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
 	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/netswitcher/netswitcher/internal/config"
+	"github.com/netswitcher/netswitcher/internal/conflict"
 	"github.com/netswitcher/netswitcher/internal/core"
-	"github.com/netswitcher/netswitcher/internal/ipc"
+	"github.com/netswitcher/netswitcher/internal/diag"
 	"github.com/netswitcher/netswitcher/internal/logging"
+	"github.com/netswitcher/netswitcher/internal/paths"
 	"github.com/netswitcher/netswitcher/internal/routeengine"
-	svcwrap "github.com/netswitcher/netswitcher/internal/service"
+	"github.com/netswitcher/netswitcher/internal/routeread"
 	"github.com/netswitcher/netswitcher/internal/tray"
 	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // Event names emitted to the frontend.
 const (
-	EventDiagLine  = "diag:line"  // one output line from ping/tracert
-	EventDiagEnd   = "diag:end"   // stream finished
-	EventDiagError = "diag:error" // stream-level error
-	EventLogLine   = "log:line"   // one slog JSON record
+	EventDiagLine  = "diag:line"
+	EventDiagEnd   = "diag:end"
+	EventDiagError = "diag:error"
+	EventLogLine   = "log:line"
 	EventLogEnd    = "log:end"
-	EventStatus    = "status:changed" // pushed status snapshot
+	EventStatus    = "status:changed"
 )
+
+// AutoStartTaskName is the Task Scheduler task used for "launch elevated at
+// logon without a UAC prompt".
+const AutoStartTaskName = "NetSwitcher"
 
 // API is constructed once and bound to the Wails app.
 type API struct {
 	ctx       context.Context
-	client    *ipc.Client
+	core      *core.Core
 	log       *slog.Logger
-	mu        sync.Mutex
-	cancel    context.CancelFunc // cancels any active diag/log stream
-	IconBytes []byte             // tray icon (.ico); set by the GUI layer before Start
+	elevated  bool
+	logFan    *logFanout
+	IconBytes []byte // tray icon (.ico); set by the GUI layer before OnStartup
+
+	mu     sync.Mutex
+	cancel context.CancelFunc // cancels any active diag stream
 }
 
-// New returns an API bound to the default named pipe.
+// New returns an API. Whether the engine can actually modify routes depends
+// on IsElevated() — the frontend must guard non-elevated runs.
 func New() *API {
 	return &API{
-		client: ipc.NewClient(),
-		log:    slog.Default(),
+		log:      slog.Default(),
+		elevated: winutil.IsElevated(),
+		logFan:   newLogFanout(),
 	}
 }
 
-// OnStartup is called by Wails with the runtime context. Required so we can
-// emit events and use the runtime API.
+// OnStartup is called by Wails with the runtime context.
 func (a *API) OnStartup(ctx context.Context) {
 	a.ctx = ctx
-	// Push status updates from the service to the frontend in the background.
+	// File + stdout logging always (so logs work even when non-elevated).
+	logDir, _ := paths.LogDir()
+	_, _ = logging.Configure("info", logDir)
+	logging.SetPipeSink(a.logFan)
+
 	go a.subscribeStatusLoop(ctx)
-	// System tray (X button hides the window; tray icon is the way back).
 	if len(a.IconBytes) > 0 {
 		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.quitApp)
 	}
-}
-
-// showWindow brings the hidden window back to the foreground.
-func (a *API) showWindow() {
-	if a.ctx == nil {
-		return
-	}
-	runtime.WindowShow(a.ctx)
-}
-
-// applyNow triggers a re-apply (tray menu convenience).
-func (a *API) applyNow() {
-	if _, err := a.ApplyNow(); err != nil {
-		a.log.Warn("tray apply-now failed", "err", err)
+	if a.elevated {
+		a.startEngine()
 	}
 }
 
-// quitApp exits the whole GUI process. The service is independent and keeps
-// running (this only quits the desktop app).
-func (a *API) quitApp() {
-	if a.ctx == nil {
-		return
-	}
-	runtime.Quit(a.ctx)
-}
+// startEngine brings up the in-process route engine (core). Idempotent.
+func (a *API) startEngine() {
+	cfgPath, _ := paths.ConfigPath()
+	statePath, _ := paths.StatePath()
+	logDir, _ := paths.LogDir()
 
-// ---------- Service availability ----------
-
-// ServiceAvailable returns whether the IPC service is reachable. The frontend
-// uses this to toggle the "service not running" banner.
-func (a *API) ServiceAvailable() bool {
-	_, err := a.client.Call(ipc.MethodGetStatus, struct{}{})
-	return err == nil
-}
-
-// ServiceInstalled reports whether the service is registered with SCM
-// (independent of whether it's currently running). Used by the banner to pick
-// the right button label: "安装并启动" vs "启动". Querying SCM status does not
-// require elevation.
-func (a *API) ServiceInstalled() bool {
-	st, err := svcwrap.Query()
+	c, err := core.New(core.Options{
+		ConfigPath: cfgPath,
+		StatePath:  statePath,
+		LogLevel:   "info",
+		LogDir:     logDir,
+	}, a.log)
 	if err != nil {
-		return false
+		a.log.Error("core init failed", "err", err)
+		return
 	}
-	return st.Installed
+	if err := c.Start(); err != nil {
+		a.log.Error("core start failed", "err", err)
+		return
+	}
+	a.core = c
+	a.log.Info("embedded engine started (elevated)", "pid", os.Getpid())
 }
 
-// ---------- Service control ----------
+// ---------- Status / elevation ----------
 
-// StartServiceElevated triggers a UAC prompt to run `netswitcher.exe service
-// start`. The frontend calls this from the "service not running" banner.
-func (a *API) StartServiceElevated() error {
-	return winutil.StartServiceElevated("")
+// IsElevated reports whether the GUI process has admin rights (and thus can
+// modify routes). The frontend shows a relaunch prompt when false.
+func (a *API) IsElevated() bool { return a.elevated }
+
+// EngineActive reports whether the embedded route engine is running.
+func (a *API) EngineActive() bool { return a.core != nil }
+
+// RelaunchElevated re-launches the binary (GUI mode) with a UAC prompt and
+// quits the current (non-elevated) instance so there's only one window.
+func (a *API) RelaunchElevated() error {
+	if err := winutil.RelaunchElevated(""); err != nil {
+		return err
+	}
+	// The elevated instance is starting via UAC; close this non-elevated one.
+	if a.ctx != nil {
+		go func() {
+			<-time.After(500 * time.Millisecond)
+			runtime.Quit(a.ctx)
+		}()
+	}
+	return nil
 }
 
-// ---------- Single-shot methods ----------
+// ---------- Single-shot methods (all require the engine) ----------
 
 // GetStatus returns the current snapshot + last apply + conflicts.
 func (a *API) GetStatus() (core.StatusResponse, error) {
-	var st core.StatusResponse
-	if err := a.client.CallJSON(ipc.MethodGetStatus, struct{}{}, &st); err != nil {
-		return core.StatusResponse{}, err
+	if a.core == nil {
+		return core.StatusResponse{}, errEngine
 	}
-	return st, nil
+	return a.core.Status(), nil
 }
 
 // GetConfig returns the full config document.
 func (a *API) GetConfig() (config.Config, error) {
-	var cfg config.Config
-	if err := a.client.CallJSON(ipc.MethodGetConfig, struct{}{}, &cfg); err != nil {
-		return config.Config{}, err
+	if a.core == nil {
+		return config.Config{}, errEngine
 	}
-	return cfg, nil
+	return *a.core.Config(), nil
 }
 
-// SaveConfig replaces the whole config (with validation).
+// SaveConfig replaces the whole config (with validation) and re-applies.
 func (a *API) SaveConfig(cfg config.Config) error {
-	_, err := a.client.Call(ipc.MethodSaveConfig, map[string]any{"config": cfg})
-	return err
+	if a.core == nil {
+		return errEngine
+	}
+	return a.core.SaveConfig(&cfg)
 }
 
-// SaveProfile is the GUI convenience (§8.2): load → replace/insert profile → save.
+// SaveProfile is the GUI convenience: load → replace/insert profile → save.
 func (a *API) SaveProfile(p config.Profile) error {
-	cfg, err := a.GetConfig()
-	if err != nil {
-		return err
+	if a.core == nil {
+		return errEngine
 	}
+	cfg := *a.core.Config()
 	replaced := false
 	for i := range cfg.Profiles {
 		if cfg.Profiles[i].ID == p.ID {
@@ -163,15 +180,15 @@ func (a *API) SaveProfile(p config.Profile) error {
 	if !replaced {
 		cfg.Profiles = append(cfg.Profiles, p)
 	}
-	return a.SaveConfig(cfg)
+	return a.core.SaveConfig(&cfg)
 }
 
 // DeleteProfile removes a profile by id.
 func (a *API) DeleteProfile(id string) error {
-	cfg, err := a.GetConfig()
-	if err != nil {
-		return err
+	if a.core == nil {
+		return errEngine
 	}
+	cfg := *a.core.Config()
 	out := cfg.Profiles[:0]
 	for _, p := range cfg.Profiles {
 		if p.ID != id {
@@ -184,22 +201,23 @@ func (a *API) DeleteProfile(id string) error {
 	} else if cfg.ActiveProfile == id {
 		cfg.ActiveProfile = ""
 	}
-	return a.SaveConfig(cfg)
+	return a.core.SaveConfig(&cfg)
 }
 
 // SetActiveProfile switches the active profile and triggers an apply.
 func (a *API) SetActiveProfile(id string) error {
-	_, err := a.client.Call(ipc.MethodSetActiveProfile, map[string]any{"id": id})
-	return err
+	if a.core == nil {
+		return errEngine
+	}
+	return a.core.SetActiveProfile(id)
 }
 
 // ApplyNow forces a re-apply and returns the result.
 func (a *API) ApplyNow() (routeengine.ApplyResult, error) {
-	var r routeengine.ApplyResult
-	if err := a.client.CallJSON(ipc.MethodApplyNow, struct{}{}, &r); err != nil {
-		return routeengine.ApplyResult{}, err
+	if a.core == nil {
+		return routeengine.ApplyResult{}, errEngine
 	}
-	return r, nil
+	return a.core.ApplyOnce("gui"), nil
 }
 
 // RouteRow is one row of the Routes page, tagged with its likely source.
@@ -210,36 +228,65 @@ type RouteRow struct {
 	InterfaceAlias    string `json:"interfaceAlias"`
 	RouteMetric       int    `json:"routeMetric"`
 	InterfaceMetric   int    `json:"interfaceMetric"`
-	Source            string `json:"source"` // managed | system | suspect
+	Source            string `json:"source"`
 }
 
 // GetRouteTable returns the live route table with per-row source tags.
 func (a *API) GetRouteTable() ([]RouteRow, error) {
-	raw, err := a.client.Call(ipc.MethodGetRouteTable, struct{}{})
+	rows, err := routeread.Read(a.ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read route table: %w", err)
 	}
-	var resp struct {
-		Rows []RouteRow `json:"rows"`
+	var managed []struct{ Destination string }
+	if a.core != nil {
+		for _, e := range a.core.ManagedRoutes() {
+			managed = append(managed, struct{ Destination string }{e.Destination})
+		}
 	}
-	if err := json.Unmarshal(raw, &resp); err != nil {
-		return nil, fmt.Errorf("decode route table: %w", err)
+	managedSet := make(map[string]bool, len(managed))
+	for _, m := range managed {
+		managedSet[m.Destination] = true
 	}
-	return resp.Rows, nil
+
+	st := core.StatusResponse{}
+	if a.core != nil {
+		st = a.core.Status()
+	}
+	vpnIdx := make(map[int]bool)
+	for _, ifc := range st.Interfaces {
+		if conflict.IsVPNInterface(ifc) {
+			vpnIdx[ifc.Index] = true
+		}
+	}
+
+	out := make([]RouteRow, 0, len(rows))
+	for _, r := range rows {
+		src := string(routeread.SourceSystem)
+		if managedSet[r.DestinationPrefix] {
+			src = string(routeread.SourceManaged)
+		} else if vpnIdx[r.InterfaceIndex] {
+			src = string(routeread.SourceSuspect)
+		}
+		out = append(out, RouteRow{
+			DestinationPrefix: r.DestinationPrefix,
+			NextHop:           r.NextHop,
+			InterfaceIndex:    r.InterfaceIndex,
+			InterfaceAlias:    r.InterfaceAlias,
+			RouteMetric:       r.RouteMetric,
+			InterfaceMetric:   r.InterfaceMetric,
+			Source:            src,
+		})
+	}
+	return out, nil
 }
 
 // ---------- Streaming diagnostics ----------
 
-// Ping streams ping.exe output to the frontend via EventDiagLine events,
-// then emits EventDiagEnd. Cancels any prior active diagnostic.
-func (a *API) Ping(target string) error {
-	return a.runDiag(ipc.MethodPing, target)
-}
+// Ping streams ping.exe output as EventDiagLine, then EventDiagEnd.
+func (a *API) Ping(target string) error { return a.runDiag(true, target) }
 
 // Tracert streams tracert.exe output, same event protocol as Ping.
-func (a *API) Tracert(target string) error {
-	return a.runDiag(ipc.MethodTracert, target)
-}
+func (a *API) Tracert(target string) error { return a.runDiag(false, target) }
 
 // StopDiag cancels an in-flight ping/tracert.
 func (a *API) StopDiag() {
@@ -251,80 +298,154 @@ func (a *API) StopDiag() {
 	}
 }
 
-func (a *API) runDiag(method, target string) error {
+func (a *API) runDiag(isPing bool, target string) error {
 	a.StopDiag()
 	ctx, cancel := context.WithCancel(context.Background())
 	a.mu.Lock()
 	a.cancel = cancel
 	a.mu.Unlock()
 
-	frames, errCh, err := a.client.Stream(method, map[string]any{"target": target})
-	if err != nil {
-		cancel()
-		return err
+	run := diag.Tracert
+	if isPing {
+		run = diag.Ping
 	}
 	go func() {
 		defer cancel()
 		a.mu.Lock()
 		a.cancel = nil
 		a.mu.Unlock()
-		for f := range frames {
-			a.emit(EventDiagLine, trimQuotes(string(f.Data)))
-		}
-		if e := <-errCh; e != nil {
-			a.emit(EventDiagError, e.Error())
+		err := run(ctx, target, func(line string) error {
+			return a.emitErr(EventDiagLine, line)
+		})
+		if err != nil {
+			a.emit(EventDiagError, err.Error())
 		}
 		a.emit(EventDiagEnd, nil)
-		_ = ctx
 	}()
 	return nil
 }
 
 // ---------- Log streaming ----------
 
-// SubscribeLogs pushes each matching log line as EventLogLine. Pushes until
-// the frontend calls UnsubscribeLogs or the window closes.
+// SubscribeLogs pushes each matching log line as EventLogLine, forever.
 func (a *API) SubscribeLogs(level string) error {
 	go a.subscribeLogsLoop(level)
 	return nil
 }
 
 func (a *API) subscribeLogsLoop(level string) {
-	frames, errCh, err := a.client.Stream(ipc.MethodSubscribeLogs, map[string]any{"level": level})
-	if err != nil {
-		a.emit(EventLogLine, mustJSON(map[string]string{
-			"level": "ERROR", "msg": "无法订阅日志: " + err.Error(),
-		}))
-		return
+	lvl := logging.LevelFromString(level)
+	id, ch := a.logFan.subscribe(lvl)
+	defer a.logFan.unsubscribe(id)
+	for line := range ch {
+		if a.emitErr(EventLogLine, string(line)) != nil {
+			return
+		}
 	}
-	for f := range frames {
-		a.emit(EventLogLine, string(f.Data))
-	}
-	if e := <-errCh; e != nil {
-		_ = e
-	}
-	a.emit(EventLogEnd, nil)
 }
 
 // ---------- Status push ----------
 
 func (a *API) subscribeStatusLoop(ctx context.Context) {
-	// The service's SubscribeStatus stream pushes a frame on every apply.
-	frames, errCh, err := a.client.Stream(ipc.MethodSubscribeStatus, struct{}{})
-	if err != nil {
+	if a.core == nil {
 		return
 	}
-	go func() {
-		defer func() { <-errCh }()
-		for f := range frames {
-			a.emit(EventStatus, json.RawMessage(f.Data))
+	events := make(chan core.StatusResponse, 32)
+	unsub := a.core.SubscribeStatus(func(st core.StatusResponse) {
+		select {
+		case events <- st:
+		default:
 		}
-	}()
-	_ = ctx
+	})
+	defer unsub()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case st, ok := <-events:
+			if !ok {
+				return
+			}
+			a.emit(EventStatus, st)
+		}
+	}
 }
 
-// emit publishes an event to the frontend. Safe to call before OnStartup
-// (drops silently if there is no context yet).
+// ---------- Tray callbacks ----------
+
+func (a *API) showWindow() {
+	if a.ctx != nil {
+		runtime.WindowShow(a.ctx)
+	}
+}
+
+func (a *API) applyNow() {
+	if _, err := a.ApplyNow(); err != nil {
+		a.log.Warn("tray apply-now failed", "err", err)
+	}
+}
+
+func (a *API) quitApp() {
+	if a.ctx != nil {
+		runtime.Quit(a.ctx)
+	}
+}
+
+// ---------- Auto-start (Task Scheduler) ----------
+
+// schtasksPath is the absolute path to schtasks.exe.
+const schtasksPath = "schtasks.exe"
+
+// AutoStartInstalled reports whether the logon auto-start task exists.
+func (a *API) AutoStartInstalled() bool {
+	out, err := exec.Command(schtasksPath, "/Query", "/TN", AutoStartTaskName).CombinedOutput()
+	if err != nil {
+		return false
+	}
+	// schtasks prints "ERROR: Cannot find the task" for missing tasks.
+	return !containsAny(string(out), []string{"cannot find", "找不到", "无法找到"})
+}
+
+// InstallAutoStart creates the logon auto-start task (must be elevated).
+// The task runs the current exe (no args → GUI) at user logon with highest
+// privileges, so the GUI comes back elevated after login without a UAC prompt.
+func (a *API) InstallAutoStart() error {
+	exe, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	if !a.elevated {
+		return fmt.Errorf("需要管理员权限来配置开机自启")
+	}
+	// /rl HIGHEST → run elevated; /sc ONLOGON → at logon; /f → overwrite.
+	cmd := exec.Command(schtasksPath,
+		"/Create", "/F",
+		"/TN", AutoStartTaskName,
+		"/TR", "\""+exe+"\"",
+		"/SC", "ONLOGON",
+		"/RL", "HIGHEST",
+	)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("schtasks: %s: %w", string(out), err)
+	}
+	return nil
+}
+
+// UninstallAutoStart removes the auto-start task.
+func (a *API) UninstallAutoStart() error {
+	out, err := exec.Command(schtasksPath, "/Delete", "/F", "/TN", AutoStartTaskName).CombinedOutput()
+	if err != nil && !containsAny(string(out), []string{"cannot find", "找不到", "无法找到"}) {
+		return fmt.Errorf("schtasks: %s: %w", string(out), err)
+	}
+	return nil
+}
+
+// ---------- helpers ----------
+
+var errEngine = fmt.Errorf("路由引擎未运行：请以管理员身份重启 NetSwitcher")
+
+// emit publishes an event to the frontend. Safe before OnStartup (drops).
 func (a *API) emit(name string, data any) {
 	if a.ctx == nil {
 		return
@@ -332,22 +453,81 @@ func (a *API) emit(name string, data any) {
 	runtime.EventsEmit(a.ctx, name, data)
 }
 
-// ---------- helpers ----------
+// emitErr emits and returns the write error (used to stop a stream when the
+// window is closed).
+func (a *API) emitErr(name string, data any) error {
+	if a.ctx == nil {
+		return fmt.Errorf("no context")
+	}
+	runtime.EventsEmit(a.ctx, name, data)
+	return nil
+}
 
-func trimQuotes(s string) string {
-	if len(s) >= 2 && (s[0] == '"' && s[len(s)-1] == '"') {
-		var out string
-		if err := json.Unmarshal([]byte(s), &out); err == nil {
-			return out
+func containsAny(s string, markers []string) bool {
+	for _, m := range markers {
+		if len(m) > 0 && len(s) >= len(m) {
+			for i := 0; i+len(m) <= len(s); i++ {
+				if s[i:i+len(m)] == m {
+					return true
+				}
+			}
 		}
 	}
-	return s
+	return false
 }
 
-func mustJSON(v any) string {
-	bs, _ := json.Marshal(v)
-	return string(bs)
+// logFanout fans slog records to SubscribeLogs subscribers. Same shape as the
+// IPC server's fanout, but in-process.
+type logFanout struct {
+	mu     sync.RWMutex
+	subs   map[int]*logSub
+	nextID atomic.Int64
 }
 
-// silence unused import warning when level parsing is referenced elsewhere
-var _ = logging.LevelFromString
+type logSub struct {
+	level slog.Level
+	ch    chan []byte
+}
+
+func newLogFanout() *logFanout { return &logFanout{subs: make(map[int]*logSub)} }
+
+func (f *logFanout) Write(p []byte) (int, error) {
+	lvl := extractLevel(p)
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	for _, s := range f.subs {
+		if s.level > lvl {
+			continue
+		}
+		select {
+		case s.ch <- append([]byte(nil), p...):
+		default:
+		}
+	}
+	return len(p), nil
+}
+
+func (f *logFanout) subscribe(level slog.Level) (int, <-chan []byte) {
+	id := int(f.nextID.Add(1))
+	s := &logSub{level: level, ch: make(chan []byte, 256)}
+	f.mu.Lock()
+	f.subs[id] = s
+	f.mu.Unlock()
+	return id, s.ch
+}
+
+func (f *logFanout) unsubscribe(id int) {
+	f.mu.Lock()
+	delete(f.subs, id)
+	f.mu.Unlock()
+}
+
+func extractLevel(p []byte) slog.Level {
+	var probe struct {
+		Level string `json:"level"`
+	}
+	if json.Unmarshal(p, &probe) != nil {
+		return slog.LevelInfo
+	}
+	return logging.LevelFromString(probe.Level)
+}

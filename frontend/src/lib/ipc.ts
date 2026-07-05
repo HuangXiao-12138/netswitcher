@@ -1,9 +1,12 @@
 // Frontend IPC wrapper. Re-exports the Wails bindings with friendlier names
 // and centralizes the call surface so pages don't import paths directly.
 import {
-  ServiceAvailable,
-  ServiceInstalled,
-  StartServiceElevated,
+  IsElevated,
+  EngineActive,
+  RelaunchElevated,
+  AutoStartInstalled,
+  InstallAutoStart,
+  UninstallAutoStart,
   GetStatus,
   GetConfig,
   SaveConfig,
@@ -23,9 +26,12 @@ import {
 } from "../../wailsjs/runtime/runtime";
 
 export const api = {
-  serviceAvailable: () => ServiceAvailable(),
-  serviceInstalled: () => ServiceInstalled(),
-  startServiceElevated: () => StartServiceElevated(),
+  isElevated: () => IsElevated(),
+  engineActive: () => EngineActive(),
+  relaunchElevated: () => RelaunchElevated(),
+  autoStartInstalled: () => AutoStartInstalled(),
+  installAutoStart: () => InstallAutoStart(),
+  uninstallAutoStart: () => UninstallAutoStart(),
   getStatus: () => GetStatus(),
   getConfig: () => GetConfig(),
   saveConfig: (c: any) => SaveConfig(c),

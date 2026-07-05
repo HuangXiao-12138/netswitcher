@@ -16,9 +16,12 @@ import type {
   RouteRow,
 } from "../models";
 
-export function ServiceAvailable(): Promise<boolean>;
-export function ServiceInstalled(): Promise<boolean>;
-export function StartServiceElevated(): Promise<void>;
+export function IsElevated(): Promise<boolean>;
+export function EngineActive(): Promise<boolean>;
+export function RelaunchElevated(): Promise<void>;
+export function AutoStartInstalled(): Promise<boolean>;
+export function InstallAutoStart(): Promise<void>;
+export function UninstallAutoStart(): Promise<void>;
 export function GetStatus(): Promise<StatusResponse>;
 export function GetConfig(): Promise<Config>;
 export function SaveConfig(config: Config): Promise<void>;
