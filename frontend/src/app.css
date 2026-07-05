@@ -90,11 +90,15 @@ input.invalid { border-color: var(--bad); }
 select {
   appearance: none;
   -webkit-appearance: none;
+  color-scheme: dark;          /* makes the OS popup dark in Chromium */
   padding-right: 28px;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%239aa3b5' stroke-width='1.5'><path d='m1 1 4 4 4-4'/></svg>");
   background-repeat: no-repeat;
   background-position: right 10px center;
 }
+/* Dark <option> popup — Chromium/WebView2 supports this. */
+option { background: var(--bg-1); color: var(--text); }
+option:checked { background: var(--accent-dim); color: #fff; }
 [data-theme="c"] select {
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%236b7388' stroke-width='1.5'><path d='m1 1 4 4 4-4'/></svg>");
 }
