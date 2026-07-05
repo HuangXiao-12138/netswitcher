@@ -296,8 +296,7 @@
                       <td>
                         <Select
                           options={interfaces.map((ifc) => ({ value: ifc.Name, label: ifc.Name }))}
-                          value={r.viaInterface}
-                          on:change={(e) => ruleField(i, "viaInterface", e.detail)}
+                          bind:value={r.viaInterface}
                         />
                       </td>
                       <td>
@@ -339,8 +338,7 @@
               <div class="control">
                 <Select
                   options={[{ value: "", label: "（不管理默认路由）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: `${ifc.Name} (${ifc.MediaType})` }))]}
-                  value={editing.defaultRouteInterface}
-                  on:change={(e) => (editing = { ...editing, defaultRouteInterface: e.detail })}
+                  bind:value={editing.defaultRouteInterface}
                 />
               </div>
             </div>
@@ -360,8 +358,7 @@
                 <div style="flex:1; min-width:160px">
                   <Select
                     options={[{ value: "", label: "（用默认路由网卡）" }, ...interfaces.map((ifc) => ({ value: ifc.Name, label: ifc.Name }))]}
-                    value={editing.metricPolicy.preferredInterface}
-                    on:change={(e) => (editing = { ...editing, metricPolicy: { ...editing.metricPolicy!, preferredInterface: e.detail } })}
+                    bind:value={editing.metricPolicy.preferredInterface}
                   />
                 </div>
                 <span class="mini">preferred</span>

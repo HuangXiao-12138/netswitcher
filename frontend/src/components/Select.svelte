@@ -1,12 +1,9 @@
 <script lang="ts" context="module">
-  export interface SelectOption {
-    value: string;
-    label: string;
-  }
+  export interface SelectOption { value: string; label: string; }
 </script>
 
 <script lang="ts">
-  import { createEventDispatcher, onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy } from "svelte";
   import type { SelectOption } from "./Select.svelte";
 
   export let options: SelectOption[] = [];
@@ -14,102 +11,86 @@
   export let placeholder = "";
   export let disabled = false;
 
-  const dispatch = createEventDispatcher();
   let open = false;
-  let triggerEl: HTMLButtonElement;
-  let menuEl: HTMLDivElement;
+  let triggerEl: HTMLButtonElement | undefined;
   let menuStyle = "";
 
-  $: current = options.find((o) => o.value === value);
+  $: selected = options.find((o) => o.value === value);
 
+  // Always open downward, cap height to available space. Simpler than
+  // flipping — no gap calculation needed. The menu scrolls internally.
   function placeMenu() {
     if (!triggerEl) return;
     const r = triggerEl.getBoundingClientRect();
     const spaceBelow = window.innerHeight - r.bottom - 8;
-    const spaceAbove = r.top - 8;
-    const menuMax = 280;
-    // Downward if enough space; otherwise flip up using `bottom` so the
-    // menu's bottom edge sits flush above the trigger regardless of its
-    // actual content height (no gap).
-    if (spaceBelow >= Math.min(menuMax, 120) || spaceBelow >= spaceAbove) {
-      const maxH = Math.min(menuMax, spaceBelow);
-      menuStyle = `position: fixed; top: ${r.bottom + 4}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
-    } else {
-      const maxH = Math.min(menuMax, spaceAbove);
-      // Pin the menu's bottom edge to 4px above the trigger.
-      const bottomOffset = window.innerHeight - r.top + 4;
-      menuStyle = `position: fixed; bottom: ${bottomOffset}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
-    }
+    const maxH = Math.max(80, Math.min(280, spaceBelow));
+    menuStyle =
+      `position:fixed;` +
+      `top:${r.bottom + 4}px;` +
+      `left:${r.left}px;` +
+      `min-width:${Math.max(r.width, 160)}px;` +
+      `max-height:${maxH}px;` +
+      `z-index:10000;` +
+      `overflow:auto;`;
   }
+
   function toggle() {
     if (disabled) return;
-    if (open) { open = false; return; }
-    placeMenu();
-    open = true;
+    open = !open;
+    if (open) placeMenu();
   }
+
   function pick(o: SelectOption) {
-    value = o.value;
+    value = o.value;     // bind:value propagates to parent automatically
     open = false;
-    dispatch("change", o.value);
   }
+
+  // Portal: move to <body> so ancestor overflow doesn't clip the menu.
   function portal(node: HTMLElement) {
     document.body.appendChild(node);
     return { destroy() { node.remove(); } };
   }
+
+  // Close on outside-click / Escape. NO scroll listener — the menu's own
+  // overflow:auto handles scrolling; scroll-closing caused bugs.
   function onDocClick(e: MouseEvent) {
     if (!open) return;
     const t = e.target as Node;
     if (triggerEl?.contains(t)) return;
-    if (menuEl?.contains(t)) return;
+    const menu = document.querySelector(".ns-sel-menu");
+    if (menu && menu.contains(t)) return;
     open = false;
   }
-  // Close on scroll — but NOT when the scroll originates from inside the menu
-  // itself (the menu has its own overflow:auto for long option lists).
-  function onScroll(e: Event) {
-    if (!open) return;
-    if (menuEl?.contains(e.target as Node)) return;
-    open = false;
+  function onKey(e: KeyboardEvent) {
+    if (e.key === "Escape") open = false;
   }
-  function onKey(e: KeyboardEvent) { if (e.key === "Escape") open = false; }
   onMount(() => {
     document.addEventListener("click", onDocClick, true);
-    document.addEventListener("scroll", onScroll, true);
     document.addEventListener("keydown", onKey);
-    window.addEventListener("resize", () => { if (open) open = false; });
   });
   onDestroy(() => {
     document.removeEventListener("click", onDocClick, true);
-    document.removeEventListener("scroll", onScroll, true);
     document.removeEventListener("keydown", onKey);
   });
 </script>
 
+<!-- The trigger stays in-place (inside the table cell). -->
 <div class="ns-select">
-  <button
-    type="button"
-    class="ns-sel-trigger"
-    on:click={toggle}
-    bind:this={triggerEl}
-    {disabled}
-    aria-haspopup="listbox"
-    aria-expanded={open}
-  >
-    <span class="ns-sel-label">{current?.label || placeholder || "—"}</span>
-    <span class="ns-sel-caret" class:open></span>
+  <button type="button" class="ns-sel-trigger" on:click={toggle}
+    bind:this={triggerEl} {disabled}>
+    <span class="ns-sel-label">{selected?.label || placeholder || "—"}</span>
+    <span class="ns-sel-caret chev-up"></span>
   </button>
 </div>
 
+<!-- The menu is portaled to <body> + position:fixed so it floats above
+     everything regardless of table overflow. -->
 {#if open}
-  <div bind:this={menuEl} use:portal class="ns-sel-menu" style={menuStyle} role="listbox">
+  <!-- svelte-ignore a11y-click-events-have-key-events -->
+  <div class="ns-sel-menu" use:portal style={menuStyle}>
     {#each options as o}
-      <button
-        type="button"
-        class="ns-sel-opt"
-        class:sel={o.value === value}
-        on:click={() => pick(o)}
-        role="option"
-        aria-selected={o.value === value}
-      >
+      <button type="button" class="ns-sel-opt" class:sel={o.value === value}
+        on:click={() => pick(o)}>
         {o.label}
       </button>
     {/each}
@@ -121,7 +102,6 @@
 
 <style>
   .ns-select { position: relative; display: inline-block; width: 100%; }
-
   .ns-sel-trigger {
     width: 100%; display: flex; align-items: center; justify-content: space-between;
     gap: 8px; text-align: left;
@@ -129,36 +109,31 @@
     background: var(--input-bg); color: var(--text);
     border: 1px solid var(--border);
     padding: 7px 12px; padding-right: 10px;
-    border-radius: var(--comp-radius); outline: none;
-    cursor: pointer;
+    border-radius: var(--comp-radius); outline: none; cursor: pointer;
   }
   .ns-sel-trigger:hover { border-color: var(--text-faint); }
-  .ns-sel-trigger:focus { border-color: var(--accent); box-shadow: var(--focus-ring); }
-  .ns-sel-trigger:disabled { opacity: 0.45; cursor: not-allowed; }
+  .ns-sel-trigger:focus { border-color: var(--accent); }
   .ns-sel-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-
-  .ns-sel-caret {
+  .chev-up {
     width: 0; height: 0; flex-shrink: 0;
     border-left: 4px solid transparent; border-right: 4px solid transparent;
     border-top: 5px solid var(--text-faint); opacity: 0.7;
-    transition: transform 150ms;
   }
-  .ns-sel-caret.open { transform: rotate(180deg); }
+</style>
 
+<!-- Menu + option styles are global because the node is portaled to <body>. -->
+<style>
   :global(.ns-sel-menu) {
-    z-index: 1000; overflow: auto;
     background: var(--bg-1); border: 1px solid var(--border);
     border-radius: var(--comp-radius);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
-    padding: 4px;
-    display: flex; flex-direction: column; gap: 1px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+    padding: 4px; display: flex; flex-direction: column; gap: 1px;
   }
   :global(.ns-sel-opt) {
     text-align: left; width: 100%; flex-shrink: 0;
     background: transparent; border: none; color: var(--text-dim);
     padding: 7px 10px; border-radius: calc(var(--comp-radius) - 2px);
     cursor: pointer; font-family: var(--comp-font); font-size: 13px; line-height: 1.2;
-    transition: background 100ms, color 100ms;
   }
   :global(.ns-sel-opt:hover) { background: var(--bg-2); color: var(--text); }
   :global(.ns-sel-opt.sel) { background: var(--bg-2); color: var(--accent); }
