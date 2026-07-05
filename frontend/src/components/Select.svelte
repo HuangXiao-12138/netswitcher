@@ -25,10 +25,19 @@
   function placeMenu() {
     if (!triggerEl) return;
     const r = triggerEl.getBoundingClientRect();
-    // position: fixed escapes any ancestor overflow (e.g. the rule table's
-    // overflow:auto / the card's overflow:hidden) so the menu floats above
-    // the table instead of being clipped inside the cell.
-    menuStyle = `position: fixed; top: ${r.bottom + 4}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px;`;
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const spaceAbove = r.top - 8;
+    const menuMax = 280;
+    // Flip upward when there's more room above the trigger than below.
+    let top: number, maxH: number;
+    if (spaceBelow >= Math.min(menuMax, 120) || spaceBelow >= spaceAbove) {
+      top = r.bottom + 4;
+      maxH = Math.min(menuMax, spaceBelow);
+    } else {
+      maxH = Math.min(menuMax, spaceAbove);
+      top = r.top - 4 - maxH;
+    }
+    menuStyle = `position: fixed; top: ${Math.max(4, top)}px; left: ${r.left}px; min-width: ${Math.max(r.width, 160)}px; max-height: ${maxH}px;`;
   }
   function openMenu() {
     if (disabled) return;

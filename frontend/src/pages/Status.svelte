@@ -24,6 +24,29 @@
     dismissed = new Set(dismissed);
     for (const c of allConflicts) dismissed.add(conflictSig(c));
   }
+
+  // Map backend English reason keys to Chinese labels. The raw string is kept
+  // in the log file for debugging; the UI shows the translation.
+  function reasonLabel(reason: string | undefined): string {
+    if (!reason) return "—";
+    const map: Record<string, string> = {
+      startup: "启动",
+      network_change: "网络变化",
+      config_change: "配置变更",
+      deactivate: "停用配置",
+      save_config: "保存配置",
+      gui: "手动重新应用",
+    };
+    for (const [key, label] of Object.entries(map)) {
+      if (reason.startsWith(key)) {
+        const detail = reason.slice(key.length).replace(/^[:\s]+/, "");
+        return detail ? `${label}：${detail}` : label;
+      }
+    }
+    if (reason.startsWith("set_active:")) return `切换活动配置`;
+    if (reason.startsWith("cli:")) return "命令行应用";
+    return reason;
+  }
 </script>
 
 <div class="head">
@@ -133,8 +156,8 @@
 </section>
 
 <section class="muted faint" style="margin-top:18px">
-  最近一次 apply: {last?.at ? new Date(last.at).toLocaleString() : "—"}
-  · 原因: <span class="mono">{last?.reason ?? "—"}</span>
+  最近一次应用: {last?.at ? new Date(last.at).toLocaleString() : "—"}
+  · 原因: <span class="mono">{reasonLabel(last?.reason)}</span>
 </section>
 
 <style>
