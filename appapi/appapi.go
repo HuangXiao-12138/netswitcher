@@ -23,6 +23,7 @@ import (
 	"github.com/netswitcher/netswitcher/internal/logging"
 	"github.com/netswitcher/netswitcher/internal/routeengine"
 	svcwrap "github.com/netswitcher/netswitcher/internal/service"
+	"github.com/netswitcher/netswitcher/internal/tray"
 	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
@@ -38,11 +39,12 @@ const (
 
 // API is constructed once and bound to the Wails app.
 type API struct {
-	ctx    context.Context
-	client *ipc.Client
-	log    *slog.Logger
-	mu     sync.Mutex
-	cancel context.CancelFunc // cancels any active diag/log stream
+	ctx       context.Context
+	client    *ipc.Client
+	log       *slog.Logger
+	mu        sync.Mutex
+	cancel    context.CancelFunc // cancels any active diag/log stream
+	IconBytes []byte             // tray icon (.ico); set by the GUI layer before Start
 }
 
 // New returns an API bound to the default named pipe.
@@ -59,6 +61,34 @@ func (a *API) OnStartup(ctx context.Context) {
 	a.ctx = ctx
 	// Push status updates from the service to the frontend in the background.
 	go a.subscribeStatusLoop(ctx)
+	// System tray (X button hides the window; tray icon is the way back).
+	if len(a.IconBytes) > 0 {
+		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.quitApp)
+	}
+}
+
+// showWindow brings the hidden window back to the foreground.
+func (a *API) showWindow() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.WindowShow(a.ctx)
+}
+
+// applyNow triggers a re-apply (tray menu convenience).
+func (a *API) applyNow() {
+	if _, err := a.ApplyNow(); err != nil {
+		a.log.Warn("tray apply-now failed", "err", err)
+	}
+}
+
+// quitApp exits the whole GUI process. The service is independent and keeps
+// running (this only quits the desktop app).
+func (a *API) quitApp() {
+	if a.ctx == nil {
+		return
+	}
+	runtime.Quit(a.ctx)
 }
 
 // ---------- Service availability ----------

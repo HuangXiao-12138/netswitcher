@@ -5,6 +5,7 @@ package gui
 import (
 	"context"
 	"embed"
+	_ "embed"
 	"log/slog"
 
 	"github.com/netswitcher/netswitcher/appapi"
@@ -14,10 +15,14 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+//go:embed build/windows/icon.ico
+var trayIcon []byte
 
 // Run opens the desktop window and blocks until the user closes it.
 func Run(opts Options) error {
@@ -32,6 +37,7 @@ func Run(opts Options) error {
 	}
 
 	api := appapi.New()
+	api.IconBytes = trayIcon // tray icon for "minimize to tray" behavior
 	bindings := append([]any{api}, opts.Bindings...)
 
 	err := wails.Run(&options.App{
@@ -46,7 +52,15 @@ func Run(opts Options) error {
 		OnStartup: func(ctx context.Context) {
 			dir, _ := paths.ProgramDataDir()
 			slog.Info("GUI starting", "programdata", dir)
-			api.OnStartup(ctx) // wire event context
+			api.OnStartup(ctx) // wire event context + tray
+		},
+		// X button hides the window instead of quitting — the system tray
+		// menu's "退出" item is the real quit path. This is the standard
+		// always-on-utility behavior.
+		OnBeforeClose: func(ctx context.Context) (prevent bool) {
+			runtime.WindowHide(ctx)
+			slog.Info("window hidden to tray (X clicked); use tray → 退出 to quit")
+			return true
 		},
 		Bind:    bindings,
 		Windows: &windows.Options{},

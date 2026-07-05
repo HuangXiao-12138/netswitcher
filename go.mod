@@ -3,6 +3,7 @@ module github.com/netswitcher/netswitcher
 go 1.23.0
 
 require (
+	fyne.io/systray v1.12.2
 	github.com/Microsoft/go-winio v0.6.1
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/kardianos/service v1.2.4
