@@ -1,8 +1,6 @@
 // generate-icon: writes build/windows/icon.ico as a 32-bit RGBA multi-size
-// ICO (16/32/48) using PNG-encoded entries (modern, preserves full color +
-// alpha; Windows 10+ supports PNG ICO entries). The design is a bright-blue
-// double-arrow (⇄) on dark navy, drawn as geometric shapes so it's legible
-// at 16x16.
+// ICO (16/32/48/256) using PNG-encoded entries. Design: bright-blue square
+// with a dark-navy "N" monogram (NetSwitcher). Legible at 16x16.
 //
 // Usage:  go run build/windows/generate-icon.go
 package main
@@ -14,80 +12,97 @@ import (
 	"image/color"
 	"image/draw"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 )
 
-func drawIcon(size int) image.Image {
-	img := image.NewRGBA(image.Rect(0, 0, size, size))
-	bg := color.RGBA{0x14, 0x17, 0x1F, 0xFF}
-	draw.Draw(img, img.Bounds(), &image.Uniform{bg}, image.Point{}, draw.Src)
+const (
+	accentBlue = 0x5FB8FF // background
+	darkNavy   = 0x14171F // the N
+)
 
-	accent := color.RGBA{0x5F, 0xB8, 0xFF, 0xFF}
-	t := size / 8 // line thickness, scales with size (min ~2 at 16px)
-	if t < 2 {
-		t = 2
-	}
-	mid := size / 2
-	gap := size / 4 // vertical separation between the two arrows
-
-	// Top arrow → (right), bottom arrow ← (left).
-	drawArrow(img, size, mid-gap, +1, t, accent) // right-pointing
-	drawArrow(img, size, mid+gap, -1, t, accent) // left-pointing
-	return img
+func rgba(c uint32) color.RGBA {
+	return color.RGBA{byte(c >> 16), byte(c >> 8), byte(c), 0xFF}
 }
 
-// drawArrow draws a horizontal arrow centered at y, pointing dir (+1 right,
-// -1 left), with the given thickness in accent color.
-func drawArrow(img *image.RGBA, size, y, dir, t int, c color.Color) {
-	inset := size / 6
-	x0 := inset
-	x1 := size - inset
-	headLen := size / 4
-	// shaft (horizontal bar)
-	for yy := y - t/2; yy < y+t/2+1; yy++ {
-		if yy < 0 || yy >= size {
-			continue
-		}
-		for xx := x0; xx <= x1; xx++ {
-			img.Set(xx, yy, c)
-		}
-	}
-	// head (triangle) — for right arrow, apex at x1; for left, apex at x0
-	apexX := x1
-	baseX := x1 - headLen
-	halfH := size / 5
-	if dir < 0 {
-		apexX = x0
-		baseX = x0 + headLen
-	}
-	for dx := 0; dx < headLen; dx++ {
-		var xx int
-		if dir > 0 {
-			xx = baseX + dx
-		} else {
-			xx = baseX - dx
-		}
-		// triangle width grows as we move from apex to base
-		h := halfH * dx / headLen
-		for yy := y - h; yy <= y+h; yy++ {
-			if xx >= 0 && xx < size && yy >= 0 && yy < size {
-				img.Set(xx, yy, c)
+func fillRect(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
+	for y := y0; y <= y1; y++ {
+		for x := x0; x <= x1; x++ {
+			if x >= 0 && x < img.Bounds().Dx() && y >= 0 && y < img.Bounds().Dy() {
+				img.Set(x, y, c)
 			}
 		}
 	}
-	_ = apexX
+}
+
+// thickLine draws a line from (x0,y0) to (x1,y1) with the given thickness.
+func thickLine(img *image.RGBA, x0, y0, x1, y1, t int, c color.RGBA) {
+	dx := math.Abs(float64(x1 - x0))
+	dy := math.Abs(float64(y1 - y0))
+	sx, sy := 1, 1
+	if x0 > x1 {
+		sx = -1
+	}
+	if y0 > y1 {
+		sy = -1
+	}
+	err := dx - dy
+	x, y := x0, y0
+	h := t / 2
+	for {
+		for yy := y - h; yy <= y+h; yy++ {
+			if x >= 0 && x < img.Bounds().Dx() && yy >= 0 && yy < img.Bounds().Dy() {
+				img.Set(x, yy, c)
+			}
+		}
+		if x == x1 && y == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x += sx
+		}
+		if e2 < dx {
+			err += dx
+			y += sy
+		}
+	}
+}
+
+// drawN draws the NetSwitcher "N" monogram: blue background + dark-navy N.
+func drawN(size int) image.Image {
+	img := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.Draw(img, img.Bounds(), &image.Uniform{rgba(accentBlue)}, image.Point{}, draw.Src)
+
+	t := size / 5 // stroke thickness, scales with size
+	if t < 2 {
+		t = 2
+	}
+	margin := size / 4
+	x0, x1 := margin, size-margin
+	y0, y1 := margin, size-margin
+
+	// Left vertical stroke.
+	fillRect(img, x0, y0, x0+t, y1, rgba(darkNavy))
+	// Right vertical stroke.
+	fillRect(img, x1-t, y0, x1, y1, rgba(darkNavy))
+	// Diagonal stroke (top-left → bottom-right).
+	thickLine(img, x0, y0, x1, y1, t, rgba(darkNavy))
+	return img
 }
 
 func main() {
-	sizes := []int{16, 32, 48}
+	sizes := []int{16, 32, 48, 256}
+
 	type entry struct {
 		w, h  int
 		bytes []byte
 	}
 	var entries []entry
 	for _, s := range sizes {
-		img := drawIcon(s)
+		img := drawN(s)
 		var buf bytes.Buffer
 		if err := png.Encode(&buf, img); err != nil {
 			panic(err)
@@ -95,13 +110,12 @@ func main() {
 		entries = append(entries, entry{w: s, h: s, bytes: buf.Bytes()})
 	}
 
-	// ICONDIR (6 bytes): reserved=0, type=1 (ICO), count=N
+	// ICONDIR (6 bytes)
 	dir := make([]byte, 6)
-	binary.LittleEndian.PutUint16(dir[0:], 0)
-	binary.LittleEndian.PutUint16(dir[2:], 1)
+	binary.LittleEndian.PutUint16(dir[0:], 0) // reserved
+	binary.LittleEndian.PutUint16(dir[2:], 1) // type = ICO
 	binary.LittleEndian.PutUint16(dir[4:], uint16(len(entries)))
 
-	// ICONDIRENTRY (16 bytes each)
 	headerSize := 6 + 16*len(entries)
 	offset := headerSize
 	var out bytes.Buffer
@@ -118,8 +132,6 @@ func main() {
 		} else {
 			en[1] = byte(e.h)
 		}
-		en[2] = 0                                 // colors (0 for PNG/32-bit)
-		en[3] = 0                                 // reserved
 		binary.LittleEndian.PutUint16(en[4:], 1)  // planes
 		binary.LittleEndian.PutUint16(en[6:], 32) // bit count
 		binary.LittleEndian.PutUint32(en[8:], uint32(len(e.bytes)))
@@ -135,5 +147,5 @@ func main() {
 	if err := os.WriteFile(outPath, out.Bytes(), 0o644); err != nil {
 		panic(err)
 	}
-	os.Stderr.WriteString("wrote " + outPath + " (" + out.String()[:0] + "16/32/48, 32-bit PNG ICO)\n")
+	os.Stderr.WriteString("wrote " + outPath + " (N monogram, 16/32/48/256, 32-bit PNG ICO)\n")
 }
