@@ -5,6 +5,7 @@ package gui
 import (
 	"context"
 	"embed"
+	"fmt"
 	"log/slog"
 
 	"github.com/netswitcher/netswitcher/appapi"
@@ -39,6 +40,11 @@ func Run(opts Options) error {
 	api.IconBytes = trayIcon // tray icon for "minimize to tray" behavior
 	api.Version = opts.Version
 	bindings := append([]any{api}, opts.Bindings...)
+
+	// Ensure WebView2 runtime is installed before launching the GUI.
+	if err := EnsureWebView2(api.IsElevated()); err != nil {
+		return fmt.Errorf("ensure webview2: %w", err)
+	}
 
 	err := wails.Run(&options.App{
 		Title:     opts.Title,

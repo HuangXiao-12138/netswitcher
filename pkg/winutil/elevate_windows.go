@@ -34,6 +34,11 @@ func RelaunchElevated(exePath string) error {
 	return relaunchRunas(exePath, "")
 }
 
+// RunElevated runs an arbitrary exe with args under a UAC prompt (runas verb).
+func RunElevated(exePath, args string) error {
+	return relaunchRunas(exePath, args)
+}
+
 // ShellOpen opens a file or folder with its default handler via the shell
 // "open" verb (Explorer for folders, the associated app for files). More
 // reliable than exec.Command("explorer.exe", path) — explorer is a GUI
