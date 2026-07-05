@@ -276,7 +276,7 @@
                       </td>
                       <td>
                         {#if isAutoGateway(r.viaGateway)}
-                          <span class="gw"><span class="resolved">↳ {resolvedGatewayFor(r.viaInterface) || '—'}</span><button class="switch-link" on:click={() => toggleGateway(i)}>指定 IP</button></span>
+                          <span class="gw"><span class="resolved">{resolvedGatewayFor(r.viaInterface) || '—'}</span><button class="switch-link" on:click={() => toggleGateway(i)}>指定 IP</button></span>
                         {:else}
                           <span class="gw"><input class="cell mono gw-input {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} /><button class="switch-link" on:click={() => toggleGateway(i)}>改自动</button></span>
                           {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
@@ -407,7 +407,6 @@
   .prof-name { font-weight: 600; font-size: 13.5px; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .prof-meta { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); padding-left: 15px; display: flex; gap: 10px; }
   .prof-meta .rules { color: var(--text-dim); }
-  .prof-meta .nic::before { content: "↳ "; opacity: 0.6; }
 
   /* Editor */
   .editor { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
