@@ -200,7 +200,7 @@
         {/if}
       </button>
     {:else}
-      <div class="muted" style="padding:12px">尚无配置，点击右上角新建。</div>
+      <div class="faint" style="padding:12px;font-size:12px">（空）</div>
     {/each}
   </aside>
 
@@ -214,7 +214,7 @@
         <label>
           默认路由网卡
           <select bind:value={editing.defaultRouteInterface}>
-            <option value="">（不管理默认路由）</option>
+            <option value="">(不管理默认路由)</option>
             {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name} ({ifc.MediaType})</option>{/each}
           </select>
         </label>
@@ -229,7 +229,7 @@
           <label>
             首选网卡
             <select bind:value={editing.metricPolicy.preferredInterface}>
-              <option value="">（用默认路由网卡）</option>
+              <option value="">(用默认路由网卡)</option>
               {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name}</option>{/each}
             </select>
           </label>
@@ -310,8 +310,15 @@
         <button on:click={setActive} disabled={editing.id === activeId}>设为活动</button>
         <button class="danger" on:click={deleteProfile} disabled={deleting}>{deleting ? "删除中…" : "删除"}</button>
       </div>
+    {:else if (config?.profiles ?? []).length === 0}
+      <div class="empty-state">
+        <div class="empty-icon">⇄</div>
+        <h3>还没有路由配置</h3>
+        <p class="muted">新建一个配置，添加"哪些网段走哪块网卡"的规则，<br />NetSwitcher 会自动维护，网络变化也会重新下发。</p>
+        <button class="primary" on:click={newProfile}>+ 新建第一个配置</button>
+      </div>
     {:else}
-      <p class="muted">从左侧选择一个配置，或新建一个。</p>
+      <p class="muted">从左侧选择一个配置查看或编辑。</p>
     {/if}
   </div>
 </div>
@@ -366,6 +373,15 @@
   .rules-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* No-profiles empty state — centered in the editor area. */
+  .empty-state {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 10px; padding: 48px 24px; min-height: 280px;
+  }
+  .empty-icon { font-size: 44px; color: var(--accent); line-height: 1; opacity: 0.85; }
+  .empty-state h3 { margin: 0; font-size: 16px; color: var(--text); }
+  .empty-state p { margin: 0; font-size: 13px; line-height: 1.6; }
 
   /* Gateway cell: switch between "auto" (use NIC gateway) and a literal IP. */
   .gw { display: flex; flex-direction: column; gap: 3px; }
