@@ -24,6 +24,13 @@ if (-not $CliOnly) {
   } finally { Pop-Location }
 }
 
-$env:CGO_ENABLED = if ($CliOnly) { "0" } else { "1" }
-Invoke "go build -ldflags `"-X main.version=$Version`" -o $Binary ./cmd/netswitcher"
+if ($CliOnly) {
+  $env:CGO_ENABLED = "0"
+  Invoke "go build -ldflags `"-X main.version=$Version`" -o $Binary ./cmd/netswitcher"
+} else {
+  # Wails needs the `desktop` build tag or its runtime shows a "missing build
+  # tags" error dialog instead of the app.
+  $env:CGO_ENABLED = "1"
+  Invoke "go build -tags desktop,production -ldflags `"-X main.version=$Version`" -o $Binary ./cmd/netswitcher"
+}
 Write-Host "✓ built $Binary"

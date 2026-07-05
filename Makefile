@@ -11,8 +11,10 @@ BINARY  := netswitcher.exe
 all: build
 
 ## build: build the front-end, then compile the single binary (needs gcc).
+##   Wails requires the `desktop` build tag — without it the embedded runtime
+##   shows "Wails applications will not build without the correct build tags".
 build: frontend
-	CGO_ENABLED=1 go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/netswitcher
+	CGO_ENABLED=1 go build -tags "desktop,production" -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/netswitcher
 
 ## build-cli: compile without CGO (no GUI; service/CLI only, no gcc needed).
 build-cli:
