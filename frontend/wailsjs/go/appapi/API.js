@@ -82,3 +82,19 @@ export function StopDiag() {
 export function SubscribeLogs(level) {
   return window.go.appapi.API.SubscribeLogs(level);
 }
+
+export function GetAppInfo() {
+  return window.go.appapi.API.GetAppInfo();
+}
+
+export function GetLogLevel() {
+  return window.go.appapi.API.GetLogLevel();
+}
+
+export function SetLogLevel(level) {
+  return window.go.appapi.API.SetLogLevel(level);
+}
+
+export function OpenLogFolder() {
+  return window.go.appapi.API.OpenLogFolder();
+}

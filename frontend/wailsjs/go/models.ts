@@ -131,3 +131,15 @@ export interface RouteRow {
   interfaceMetric: number;
   source: string; // "managed" | "system" | "suspect"
 }
+
+// ----- appapi.AppInfo (Settings page) -----
+
+export interface AppInfo {
+  version: string;
+  elevated: boolean;
+  engineOn: boolean;
+  configPath: string;
+  statePath: string;
+  logDir: string;
+  pipeName?: string;
+}

@@ -7,14 +7,16 @@
   import Routes from "./pages/Routes.svelte";
   import Diagnostics from "./pages/Diagnostics.svelte";
   import Logs from "./pages/Logs.svelte";
+  import Settings from "./pages/Settings.svelte";
 
-  type PageId = "status" | "profiles" | "routes" | "diagnostics" | "logs";
+  type PageId = "status" | "profiles" | "routes" | "diagnostics" | "logs" | "settings";
   const nav: { id: PageId; label: string; icon: string }[] = [
     { id: "status", label: "状态", icon: "◉" },
     { id: "profiles", label: "配置", icon: "☰" },
     { id: "routes", label: "路由表", icon: "⇄" },
     { id: "diagnostics", label: "诊断", icon: "⌕" },
     { id: "logs", label: "日志", icon: "≣" },
+    { id: "settings", label: "设置", icon: "⚙" },
   ];
 
   let page: PageId = "status";
@@ -145,6 +147,8 @@
       <Diagnostics />
     {:else if page === "logs"}
       <Logs />
+    {:else if page === "settings"}
+      <Settings />
     {/if}
   </section>
 </main>

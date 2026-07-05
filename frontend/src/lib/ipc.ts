@@ -19,6 +19,10 @@ import {
   Tracert,
   StopDiag,
   SubscribeLogs,
+  GetAppInfo,
+  GetLogLevel,
+  SetLogLevel,
+  OpenLogFolder,
 } from "../../wailsjs/go/appapi/API";
 import {
   EventsOn,
@@ -44,6 +48,10 @@ export const api = {
   tracert: (target: string) => Tracert(target),
   stopDiag: () => StopDiag(),
   subscribeLogs: (level: string) => SubscribeLogs(level),
+  getAppInfo: () => GetAppInfo(),
+  getLogLevel: () => GetLogLevel(),
+  setLogLevel: (level: string) => SetLogLevel(level),
+  openLogFolder: () => OpenLogFolder(),
 };
 
 export const events = {

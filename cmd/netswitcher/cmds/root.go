@@ -38,7 +38,7 @@ func NewRoot(version string) *cobra.Command {
 		// a window without learning subcommands. `--help` and subcommands are
 		// still handled by cobra before this RunE fires.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGUI()
+			return runGUI(version)
 		},
 	}
 	root.PersistentFlags().StringVar(&gflags.configPath, "config", "",
@@ -50,7 +50,7 @@ func NewRoot(version string) *cobra.Command {
 
 	root.AddCommand(
 		newServiceCmd(version),
-		newGUICmd(),
+		newGUICmd(version),
 		newApplyCmd(),
 		newDumpCmd(),
 		newIPCCmd(),

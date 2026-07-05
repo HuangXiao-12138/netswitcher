@@ -17,5 +17,6 @@ type Options struct {
 	Title    string
 	Width    int
 	Height   int
-	Bindings []any // objects whose exported methods are exposed to the frontend
+	Version  string // build version, surfaced on the Settings page
+	Bindings []any  // objects whose exported methods are exposed to the frontend
 }

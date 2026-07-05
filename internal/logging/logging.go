@@ -151,6 +151,29 @@ func LevelFromString(s string) slog.Level {
 	}
 }
 
+// levelVar is the atomic level shared by the default slog handler so the
+// level can be changed at runtime via SetLevel without rebuilding the logger.
+var levelVar slog.LevelVar
+
+// SetLevel changes the active log level at runtime (atomic; safe from any
+// goroutine). Accepts debug/info/warn/error (case-insensitive).
+func SetLevel(s string) {
+	levelVar.Set(LevelFromString(s))
+}
+
+// ActiveLevel returns the current log level as a lowercase name.
+func ActiveLevel() string {
+	switch levelVar.Level() {
+	case slog.LevelDebug:
+		return "debug"
+	case slog.LevelWarn:
+		return "warn"
+	case slog.LevelError:
+		return "error"
+	}
+	return "info"
+}
+
 // Configure sets up slog with JSON output to file (rotating) and, if the
 // process has an interactive stdout (a real console), stdout too. GUI-
 // subsystem builds (-H windowsgui) have no console attached when double-
@@ -160,6 +183,8 @@ func LevelFromString(s string) slog.Level {
 // If logDir is empty, only stdout (when available) is used.
 // Returns a cleanup function the caller defers.
 func Configure(level string, logDir string) (cleanup func(), err error) {
+	levelVar.Set(LevelFromString(level))
+
 	var sinks []io.Writer
 	if stdoutIsConsole() {
 		sinks = append(sinks, os.Stdout)
@@ -181,7 +206,7 @@ func Configure(level string, logDir string) (cleanup func(), err error) {
 	tee := &teeWriter{base: multi}
 
 	logger := slog.New(slog.NewJSONHandler(tee, &slog.HandlerOptions{
-		Level: LevelFromString(level),
+		Level: &levelVar,
 	}))
 	slog.SetDefault(logger)
 	return cleanup, nil

@@ -56,6 +56,7 @@ type API struct {
 	elevated  bool
 	logFan    *logFanout
 	IconBytes []byte // tray icon (.ico); set by the GUI layer before OnStartup
+	Version   string // build version; set by the GUI layer
 
 	mu     sync.Mutex
 	cancel context.CancelFunc // cancels any active diag stream
@@ -119,6 +120,11 @@ func (a *API) startEngine() {
 		return
 	}
 	a.core = c
+	// Apply the persisted log level from config (if any) so the Settings
+	// choice survives restarts.
+	if lvl := c.Config().LogLevel; lvl != "" {
+		logging.SetLevel(lvl)
+	}
 	a.log.Info("embedded engine started (elevated)", "pid", os.Getpid())
 }
 
@@ -399,6 +405,62 @@ func (a *API) quitApp() {
 	if a.ctx != nil {
 		runtime.Quit(a.ctx)
 	}
+}
+
+// ---------- Auto-start (Task Scheduler) ----------
+
+// AppInfo describes the running build for the Settings/About section.
+type AppInfo struct {
+	Version    string `json:"version"`
+	Elevated   bool   `json:"elevated"`
+	EngineOn   bool   `json:"engineOn"`
+	ConfigPath string `json:"configPath"`
+	StatePath  string `json:"statePath"`
+	LogDir     string `json:"logDir"`
+	PipeName   string `json:"pipeName"`
+}
+
+// GetAppInfo returns build + runtime paths for the Settings page.
+func (a *API) GetAppInfo() AppInfo {
+	cfgPath, _ := paths.ConfigPath()
+	statePath, _ := paths.StatePath()
+	logDir, _ := paths.LogDir()
+	return AppInfo{
+		Version:    a.Version,
+		Elevated:   a.elevated,
+		EngineOn:   a.core != nil,
+		ConfigPath: cfgPath,
+		StatePath:  statePath,
+		LogDir:     logDir,
+	}
+}
+
+// GetLogLevel returns the active log level (debug/info/warn/error).
+func (a *API) GetLogLevel() string {
+	return logging.ActiveLevel()
+}
+
+// SetLogLevel changes the log level at runtime AND persists it to config.json
+// so it survives restarts.
+func (a *API) SetLogLevel(level string) error {
+	logging.SetLevel(level)
+	if a.core == nil {
+		return nil // can't persist without core; runtime change still applied
+	}
+	cfg := *a.core.Config()
+	cfg.LogLevel = level
+	return a.core.SaveConfig(&cfg)
+}
+
+// OpenLogFolder opens Explorer at the log directory.
+func (a *API) OpenLogFolder() error {
+	logDir, err := paths.LogDir()
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("explorer.exe", logDir)
+	winutil.HideWindow(cmd)
+	return cmd.Start()
 }
 
 // ---------- Auto-start (Task Scheduler) ----------

@@ -37,6 +37,7 @@ func Run(opts Options) error {
 
 	api := appapi.New()
 	api.IconBytes = trayIcon // tray icon for "minimize to tray" behavior
+	api.Version = opts.Version
 	bindings := append([]any{api}, opts.Bindings...)
 
 	err := wails.Run(&options.App{

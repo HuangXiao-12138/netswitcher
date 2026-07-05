@@ -34,3 +34,8 @@ export function Ping(target: string): Promise<void>;
 export function Tracert(target: string): Promise<void>;
 export function StopDiag(): Promise<void>;
 export function SubscribeLogs(level: string): Promise<void>;
+
+export function GetAppInfo(): Promise<AppInfo>;
+export function GetLogLevel(): Promise<string>;
+export function SetLogLevel(level: string): Promise<void>;
+export function OpenLogFolder(): Promise<void>;
