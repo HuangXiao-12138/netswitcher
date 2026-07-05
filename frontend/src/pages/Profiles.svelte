@@ -378,10 +378,14 @@
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
 
-  /* No-profiles empty state — fills the editor area and centers. */
+  /* No-profiles empty state — tall enough to visually center in the editor
+     area. Uses a viewport-based min-height because the .layout grid row is
+     auto-sized (content height), so min-height:100% would resolve to the
+     empty state's own content, not the page. */
   .empty-state {
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; gap: 12px; padding: 32px 24px; min-height: 100%;
+    text-align: center; gap: 12px; padding: 32px 24px;
+    min-height: calc(100vh - 180px);
   }
   .empty-state h3 { margin: 0; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); }
   .empty-state p { margin: 0; font-size: 13px; line-height: 1.6; max-width: 420px; }
