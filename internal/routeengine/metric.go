@@ -6,6 +6,8 @@ import (
 	"log/slog"
 	"os/exec"
 	"strings"
+
+	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // NetshMetric is the production MetricSetter, backed by netsh.
@@ -24,6 +26,7 @@ func (m *NetshMetric) SetInterfaceMetric(ifaceName string, metric int) error {
 		return nil
 	}
 	cmd := exec.Command("netsh", args...)
+	winutil.HideWindow(cmd) // no console flash from netsh.exe
 	var out, errB bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errB
@@ -44,6 +47,7 @@ func (m *NetshMetric) SetAutomaticMetric(ifaceName string) error {
 		return nil
 	}
 	cmd := exec.Command("netsh", args...)
+	winutil.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("netsh metric=automatic %s: %s: %w", ifaceName, strings.TrimSpace(decode(out)), err)

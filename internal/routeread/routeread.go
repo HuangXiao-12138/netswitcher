@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"os/exec"
 	"time"
+
+	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // Row is one IPv4 route. JSON tags match the Property names returned by
@@ -43,6 +45,7 @@ func Read(ctx context.Context) ([]Row, error) {
 	cmd := exec.CommandContext(ctx,
 		"powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
 		"-Command", script())
+	winutil.HideWindow(cmd) // no console flash from powershell.exe
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, fmt.Errorf("Get-NetRoute: %w: %s", err, string(out))

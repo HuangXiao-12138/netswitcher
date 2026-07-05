@@ -11,6 +11,7 @@ import (
 	"golang.org/x/text/encoding/simplifiedchinese"
 
 	"github.com/netswitcher/netswitcher/internal/state"
+	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // Executor is the route-mutation interface the engine depends on. The real
@@ -62,6 +63,7 @@ func (e *Exec) Add(r state.Entry) error {
 	}
 
 	cmd := exec.Command("route", args...)
+	winutil.HideWindow(cmd) // no console flash from route.exe
 	var out, errB bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errB
@@ -96,6 +98,7 @@ func (e *Exec) Delete(destination string, ifIndex int) error {
 	}
 
 	cmd := exec.Command("route", args...)
+	winutil.HideWindow(cmd)
 	out, runErr := cmd.CombinedOutput()
 	msg := decode(out)
 	if runErr != nil && containsAny(msg, deleteMissingMarkers) {

@@ -80,6 +80,16 @@ func (a *API) OnStartup(ctx context.Context) {
 	logging.SetPipeSink(a.logFan)
 
 	go a.subscribeStatusLoop(ctx)
+	// Second-instance signal: when another copy launches, it sets the show
+	// event; bring this window to the front.
+	go func() {
+		ch := winutil.WaitSingletonShow()
+		for range ch {
+			if a.ctx != nil {
+				runtime.WindowShow(a.ctx)
+			}
+		}
+	}()
 	if len(a.IconBytes) > 0 {
 		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.quitApp)
 	}
@@ -398,11 +408,12 @@ const schtasksPath = "schtasks.exe"
 
 // AutoStartInstalled reports whether the logon auto-start task exists.
 func (a *API) AutoStartInstalled() bool {
-	out, err := exec.Command(schtasksPath, "/Query", "/TN", AutoStartTaskName).CombinedOutput()
+	cmd := exec.Command(schtasksPath, "/Query", "/TN", AutoStartTaskName)
+	winutil.HideWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return false
 	}
-	// schtasks prints "ERROR: Cannot find the task" for missing tasks.
 	return !containsAny(string(out), []string{"cannot find", "找不到", "无法找到"})
 }
 
@@ -425,6 +436,7 @@ func (a *API) InstallAutoStart() error {
 		"/SC", "ONLOGON",
 		"/RL", "HIGHEST",
 	)
+	winutil.HideWindow(cmd)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("schtasks: %s: %w", string(out), err)
@@ -434,7 +446,9 @@ func (a *API) InstallAutoStart() error {
 
 // UninstallAutoStart removes the auto-start task.
 func (a *API) UninstallAutoStart() error {
-	out, err := exec.Command(schtasksPath, "/Delete", "/F", "/TN", AutoStartTaskName).CombinedOutput()
+	cmd := exec.Command(schtasksPath, "/Delete", "/F", "/TN", AutoStartTaskName)
+	winutil.HideWindow(cmd)
+	out, err := cmd.CombinedOutput()
 	if err != nil && !containsAny(string(out), []string{"cannot find", "找不到", "无法找到"}) {
 		return fmt.Errorf("schtasks: %s: %w", string(out), err)
 	}

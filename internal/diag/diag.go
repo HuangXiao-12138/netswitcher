@@ -17,6 +17,8 @@ import (
 	"unicode/utf8"
 
 	"golang.org/x/text/encoding/simplifiedchinese"
+
+	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // Run executes name with args and invokes onLine for each stdout line. It
@@ -31,6 +33,7 @@ func Run(ctx context.Context, onLine func(string) error, name string, args ...st
 		return errors.New("diag.Run: empty command")
 	}
 	cmd := exec.CommandContext(ctx, name, args...)
+	winutil.HideWindow(cmd) // no console flash from ping.exe/tracert.exe
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return err

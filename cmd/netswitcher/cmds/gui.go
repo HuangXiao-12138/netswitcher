@@ -6,11 +6,23 @@ import (
 	"github.com/spf13/cobra"
 
 	gui "github.com/netswitcher/netswitcher" // root package gui
+	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
 // runGUI launches the Wails desktop window and is shared by the `gui`
 // subcommand and the bare-invocation default (double-clicking the exe).
+//
+// Single-instance: if another GUI is already running, this instance signals
+// it to show its window (it may be hidden to tray) and exits. CLI subcommands
+// (dump/apply/ipc) bypass this and can run alongside the GUI.
 func runGUI() error {
+	if owned, err := winutil.AcquireSingleton(); err == nil && !owned {
+		// Another instance owns the GUI; nudge it forward and bail out.
+		_ = winutil.SignalSingletonShow()
+		infof("NetSwitcher 已在运行，已唤出主窗口。")
+		return nil
+	}
+
 	infof("NetSwitcher GUI 启动")
 	err := gui.Run(gui.Options{Title: "NetSwitcher", Width: 1024, Height: 700})
 	if err == nil {
