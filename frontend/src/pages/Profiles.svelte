@@ -271,7 +271,7 @@
             <div class="rules-scroll">
               <table>
                 <thead>
-                  <tr><th class="col-dest">目标 CIDR</th><th class="col-if">接口</th><th class="col-gw">网关</th><th class="col-m">Metric</th><th class="col-en">启用</th><th></th></tr>
+                  <tr><th class="col-dest">目标 CIDR</th><th class="col-if">接口</th><th class="col-gwm">网关模式</th><th class="col-gw">网关</th><th class="col-m">Metric</th><th class="col-en">启用</th><th></th></tr>
                 </thead>
                 <tbody>
                   {#each editing.rules as r, i}
@@ -286,16 +286,18 @@
                         </select>
                       </td>
                       <td>
-                        <div class="gw">
-                          <div class="seg">
-                            <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "auto"} on:click={() => setGatewayMode(i, "auto")} title="自动取该网卡当前网关">自动</button>
-                            <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "custom"} on:click={() => setGatewayMode(i, "custom")} title="手动指定网关 IP">指定</button>
-                          </div>
-                          {#if gatewayMode(r.viaGateway) === "custom"}
-                            <input class="cell mono gw-ip {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} placeholder="如 192.168.1.1" on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
-                            {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
-                          {/if}
+                        <div class="seg">
+                          <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "auto"} on:click={() => setGatewayMode(i, "auto")} title="自动取该网卡当前网关">自动</button>
+                          <button type="button" class="seg-btn" class:active={gatewayMode(r.viaGateway) === "custom"} on:click={() => setGatewayMode(i, "custom")} title="手动指定网关 IP">指定</button>
                         </div>
+                      </td>
+                      <td>
+                        {#if gatewayMode(r.viaGateway) === "auto"}
+                          <span class="resolved-gw mono" title="该网卡当前的默认网关（auto 自动解析）">{resolvedGatewayFor(r.viaInterface) || "—"}</span>
+                        {:else}
+                          <input class="cell mono gw-ip {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} placeholder="如 192.168.1.1" on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
+                          {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
+                        {/if}
                       </td>
                       <td><input class="cell mono metric" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} /></td>
                       <td><span class="toggle-sw" class:off={r.enabled === false} on:click={() => ruleField(i, "enabled", !(r.enabled !== false))} role="switch" tabindex="0"></span></td>
@@ -461,23 +463,24 @@
   .rules-card { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
   .rules-empty { padding: 18px; color: var(--text-faint); font-size: 13px; text-align: center; }
   .rules-scroll { overflow-x: auto; }
-  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  table { border-collapse: collapse; width: 100%; min-width: 720px; }
   th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--border-soft); vertical-align: middle; }
   th { font-size: 11px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg-2); }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
-  .col-dest { width: 20%; } .col-if { width: 14%; } .col-gw { width: 30%; } .col-m { width: 9%; } .col-en { width: 8%; }
+  .col-dest { width: 18%; } .col-if { width: 13%; } .col-gwm { width: 11%; } .col-gw { width: 19%; } .col-m { width: 8%; } .col-en { width: 8%; }
   .cell { width: 100%; box-sizing: border-box; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text); padding: 5px 8px; font-size: 12.5px; border-radius: 4px; outline: none; font-family: inherit; }
   .cell.mono { font-family: var(--font-mono); }
   .cell:focus { border-color: var(--accent); }
   .cell.invalid { border-color: var(--bad); }
-  .gw { display: flex; align-items: center; gap: 6px; width: 100%; flex-wrap: wrap; }
-  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; flex: 0 0 auto; }
-  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 11px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; }
+  /* Gateway mode (segmented) + gateway value (read-only resolved or input). */
+  .seg { display: inline-flex; border: 1px solid var(--border); border-radius: 4px; overflow: hidden; }
+  .seg-btn { background: var(--bg-0); border: none; color: var(--text-dim); padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: inherit; line-height: 1.2; }
   .seg-btn + .seg-btn { border-left: 1px solid var(--border); }
   .seg-btn:hover { color: var(--text); }
   .seg-btn.active { background: var(--accent-dim); color: #fff; }
-  .gw-ip { width: 120px; flex: 1 1 auto; min-width: 90px; }
+  .resolved-gw { display: inline-block; font-size: 12px; color: var(--text-dim); padding: 5px 8px; background: var(--bg-0); border: 1px solid var(--border-soft); border-radius: 4px; }
+  .gw-ip { width: 100%; box-sizing: border-box; }
   .metric { width: 60px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .toggle-sw {
