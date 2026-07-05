@@ -5,6 +5,31 @@
 
 ---
 
+> ## ⚠️ 实现演化说明（以代码和 README 为准）
+>
+> 本文档描述的是**原始设计**（Phase 0–7：Windows 服务 + 命名管道 IPC + 非提权 GUI）。
+> 实际实现经过用户反馈后**演化成了不同架构**，下方文档内容仅保留作设计参考。
+> 当前真实架构请以 **README.md** 和 **代码** 为准。关键差异：
+>
+> | 维度 | 文档原文（已过时） | 实际实现 |
+> |---|---|---|
+> | 进程模型 | Windows 服务（SYSTEM）+ 非提权 GUI，命名管道 IPC | **单进程**：提权 GUI 内嵌路由引擎（`appapi` 持有 `*core.Core` 直接调用，不走 IPC） |
+> | 首次使用 | `service install`（注册 SCM） | 检测非提权 → 弹"以管理员身份重启" |
+> | 开机自启 | SCM 自动启动 | **任务计划**（`schtasks /SC ONLOGON /RL HIGHEST`） |
+> | 关窗口 | 服务继续在后台 | GUI 缩到**系统托盘**（fyne.io/systray），进程继续维护路由 |
+> | 单实例 | 无 | 命名 mutex（`Local\`）+ 事件信号 |
+> | 子进程清理 | 无 | Job Object（`KILL_ON_JOB_CLOSE`），父死子灭 |
+> | 窗口 | 原生标题栏 | **Frameless** 自绘顶栏（`--wails-draggable: drag`） |
+> | 构建标签 | 无特殊 | `-tags desktop,production` + `-ldflags "-H windowsgui"` |
+> | 子进程控制台 | 默认 | 每个子进程 `CREATE_NO_WINDOW`（不闪黑窗） |
+> | PowerShell | `ConvertTo-Json -AsArray` | 去掉 `-AsArray`（PS 5.1 不支持）+ GBK 解码中文接口名 |
+> | 服务代码 | 核心 | 仍保留（`internal/service`、`internal/ipc`、`internal/app`），但 **GUI 不再使用**（遗留） |
+>
+> 其余设计（路由引擎声明式 reconcile、配置校验规则、netwatch 轮询去抖、metric 管理、
+> 冲突检测、state.json 做 diff 基线、route.exe 子进程 + GBK + 幂等）**与文档一致，已按文档实现**。
+
+---
+
 ## 1. 项目概述
 
 **解决的问题**：Windows 机器同时连着内网（以太网，无 Internet）和外网（Wi-Fi，有 Internet）时，让指定网段（如 `168.168.0.0/16` 内网服务器、`172.16.0.0/16` 内网终端）走以太网，其余流量（含默认路由）走 Wi-Fi。手动用 `route -p` 配置的问题是：Wi-Fi 重连、网卡 interface index 变化、DHCP 续约后持久路由经常失效。

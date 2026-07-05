@@ -2,6 +2,7 @@ build/bin/
 dist/
 frontend/dist/
 frontend/node_modules/
+tmp/
 *.exe
 *.exe~
 *.dll
