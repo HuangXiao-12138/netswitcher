@@ -17,14 +17,21 @@ import (
 //   1. main calls AcquireSingleton() before launching the GUI.
 //   2. If it returns owned=false, another instance is running; main calls
 //      SignalSingletonShow() (sets the event) and exits.
-//   3. If owned=true, the GUI owns the lock. WaitForSingletonShow()
-//      returns a channel that fires each time a second instance signals.
-//      The GUI wires that to runtime.WindowShow.
+//   3. If owned=true, the GUI owns the lock. WaitSingletonShow() returns a
+//      channel that fires each time a second instance signals.
+//
+// We use a direct CreateMutexW syscall (not windows.CreateMutex) because the
+// ERROR_ALREADY_EXISTS status is only reliable if captured atomically with
+// the syscall — the Go runtime clobbers GetLastError between calls. The
+// Local\ namespace is session-scoped (one instance per login session) and
+// needs no special privilege.
 
 const (
-	singletonMutexName = `Global\NetSwitcher-Single-Instance`
-	singletonEventName = `Global\NetSwitcher-Show-Event`
+	singletonMutexName = `Local\NetSwitcher-Single-Instance`
+	singletonEventName = `Local\NetSwitcher-Show-Event`
 )
+
+var procCreateMutexW = windows.NewLazySystemDLL("kernel32.dll").NewProc("CreateMutexW")
 
 var (
 	singletonMu    sync.Mutex
@@ -35,6 +42,17 @@ var (
 	}
 )
 
+// createMutex calls CreateMutexW directly and returns the captured last-error
+// atomically so ERROR_ALREADY_EXISTS is reliable.
+func createMutex(name string) (handle windows.Handle, alreadyExists bool, err error) {
+	namePtr, _ := windows.UTF16PtrFromString(name)
+	r0, _, e1 := procCreateMutexW.Call(0, 0, uintptr(unsafe.Pointer(namePtr)))
+	if r0 == 0 {
+		return 0, false, fmt.Errorf("CreateMutexW failed: %w", e1)
+	}
+	return windows.Handle(r0), e1 == windows.ERROR_ALREADY_EXISTS, nil
+}
+
 // AcquireSingleton tries to grab the singleton mutex. Returns owned=true if
 // this is the first instance (caller proceeds to run the GUI); owned=false
 // if another instance already holds it (caller should signal + exit).
@@ -44,14 +62,12 @@ func AcquireSingleton() (owned bool, err error) {
 	if singletonState.got {
 		return true, nil // already acquired in this process
 	}
-	mname, _ := windows.UTF16PtrFromString(singletonMutexName)
-	mutex, err := windows.CreateMutex(nil, false, mname)
+	mutex, alreadyExists, err := createMutex(singletonMutexName)
 	if err != nil {
 		return false, fmt.Errorf("create mutex: %w", err)
 	}
-	// ERROR_ALREADY_EXISTS (183) means another instance owns the mutex.
-	if windows.GetLastError() == windows.ERROR_ALREADY_EXISTS {
-		// We still got a handle to it; close it since we're not the owner.
+	if alreadyExists {
+		// Another instance owns the mutex; we just got a handle to it.
 		_ = windows.CloseHandle(mutex)
 		return false, nil
 	}
@@ -87,7 +103,6 @@ func WaitSingletonShow() <-chan struct{} {
 	ch := make(chan struct{}, 1)
 	go func() {
 		for {
-			// Wait indefinitely for the auto-reset event.
 			status, err := windows.WaitForSingleObject(singletonState.event, windows.INFINITE)
 			if err != nil || status == windows.WAIT_FAILED {
 				return
@@ -100,6 +115,3 @@ func WaitSingletonShow() <-chan struct{} {
 	}()
 	return ch
 }
-
-// _ unsafe import retained to keep windows.Handle conversions consistent.
-var _ = unsafe.Sizeof(uintptr(0))
