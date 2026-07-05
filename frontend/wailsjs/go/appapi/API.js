@@ -75,6 +75,10 @@ export function GetRouteTable() {
   return window.go.appapi.API.GetRouteTable();
 }
 
+export function GetDefaultRouteInterface() {
+  return window.go.appapi.API.GetDefaultRouteInterface();
+}
+
 export function Ping(target) {
   return window.go.appapi.API.Ping(target);
 }

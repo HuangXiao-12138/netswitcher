@@ -281,6 +281,29 @@ type RouteRow struct {
 	Source            string `json:"source"`
 }
 
+// GetDefaultRouteInterface returns the interface alias of the system's current
+// default route (0.0.0.0/0 with lowest combined metric). Used by the Profiles
+// overview to show "系统默认（WLAN）" when the user hasn't configured
+// defaultRouteInterface. Returns "" if none found.
+func (a *API) GetDefaultRouteInterface() string {
+	rows, err := routeread.Read(a.ctx)
+	if err != nil {
+		return ""
+	}
+	var bestAlias string
+	var bestMetric int = 1<<31 - 1
+	for _, r := range rows {
+		if r.DestinationPrefix == "0.0.0.0/0" && r.NextHop != "0.0.0.0" && r.NextHop != "" {
+			total := r.RouteMetric + r.InterfaceMetric
+			if total < bestMetric {
+				bestMetric = total
+				bestAlias = r.InterfaceAlias
+			}
+		}
+	}
+	return bestAlias
+}
+
 // GetRouteTable returns the live route table with per-row source tags.
 func (a *API) GetRouteTable() ([]RouteRow, error) {
 	rows, err := routeread.Read(a.ctx)

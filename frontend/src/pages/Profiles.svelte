@@ -13,6 +13,7 @@
   let errorText = "";
   let fieldErrors: Record<string, string> = {};
   let advOpen = false;
+  let systemDefaultIf = ""; // the live default-route interface name
 
   $: activeId = config?.activeProfile ?? "";
   // Double optional chaining: config.profiles can be null when the on-disk
@@ -23,9 +24,10 @@
 
   async function load() {
     try {
-      const [cfg, st] = await Promise.all([api.getConfig(), api.getStatus()]);
+      const [cfg, st, defaultIf] = await Promise.all([api.getConfig(), api.getStatus(), api.getDefaultRouteInterface().catch(() => "")]);
       config = cfg;
       interfaces = st.interfaces ?? [];
+      systemDefaultIf = defaultIf || "";
       if (!selectedId && cfg.profiles.length) selectedId = cfg.profiles[0].id;
       // Set the working copy directly from the FRESH cfg. Don't call
       // prepareEditing() here: `selected` is a reactive that lags `config=cfg`
@@ -264,7 +266,7 @@
             <div class="ov-stats">
               <div class="ov-stat"><span class="k">规则</span><span class="v accent">{editing.rules.length}</span></div>
               <div class="ov-stat"><span class="k">启用</span><span class="v">{enabledCount} / {editing.rules.length}</span></div>
-              <div class="ov-stat"><span class="k">默认出口</span><span class="v">{editing.defaultRouteInterface || '—'}</span></div>
+              <div class="ov-stat"><span class="k">默认出口</span><span class="v">{editing.defaultRouteInterface || (systemDefaultIf ? `系统默认（${systemDefaultIf}）` : '—')}</span></div>
               <div class="ov-stat"><span class="k">Metric</span><span class="v">{editing.metricPolicy ? `${editing.metricPolicy.preferredMetric ?? '—'} / ${editing.metricPolicy.othersMetric ?? '—'}` : '—'}</span></div>
             </div>
           </div>

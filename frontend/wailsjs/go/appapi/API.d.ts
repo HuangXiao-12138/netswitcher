@@ -32,6 +32,7 @@ export function SetActiveProfile(id: string): Promise<void>;
 export function DeactivateProfile(): Promise<void>;
 export function ApplyNow(): Promise<ApplyResult>;
 export function GetRouteTable(): Promise<RouteRow[]>;
+export function GetDefaultRouteInterface(): Promise<string>;
 export function Ping(target: string): Promise<void>;
 export function Tracert(target: string): Promise<void>;
 export function StopDiag(): Promise<void>;
