@@ -15,11 +15,22 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/netswitcher/netswitcher/cmd/netswitcher/cmds"
 )
 
 // version is overridden at build time via -ldflags "-X main.version=...".
 var version = "dev"
+
+func init() {
+	// Cobra ships a "mousetrap" that intercepts explorer.exe (double-click)
+	// launches and prints "This is a command line tool. You need to open
+	// cmd.exe…". For NetSwitcher the *intended* double-click behavior is to
+	// open the GUI, so disable it.
+	cobra.MousetrapHelpText = ""
+	cobra.MousetrapDisplayDuration = 0
+}
 
 func main() {
 	root := cmds.NewRoot(version)
