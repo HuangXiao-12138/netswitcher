@@ -195,7 +195,6 @@
         on:click={() => (selectedId = p.id)}
       >
         <span class="prof-name">{p.name}</span>
-        <span class="faint mono">{p.id}</span>
         {#if p.id === activeId}
           <span class="tag good">活动</span>
         {/if}
@@ -209,7 +208,6 @@
     {#if editing}
       <div class="form-row">
         <label>显示名 <input bind:value={editing.name} /></label>
-        <label>配置 ID <input value={editing.id} disabled class="mono" /></label>
       </div>
 
       <div class="form-row">
