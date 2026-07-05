@@ -8,7 +8,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Binary = "netswitcher.exe"
+$Binary = "build/bin/netswitcher.exe"
+New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
 
 function Invoke([string]$Cmd) {
   Write-Host "» $Cmd"
