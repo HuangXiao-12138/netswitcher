@@ -27,20 +27,29 @@
       config = cfg;
       interfaces = st.interfaces ?? [];
       if (!selectedId && cfg.profiles.length) selectedId = cfg.profiles[0].id;
-      prepareEditing();
+      // Set the working copy directly from the FRESH cfg. Don't call
+      // prepareEditing() here: `selected` is a reactive that lags `config=cfg`
+      // by a tick, so reading it synchronously returns the pre-save profile
+      // and reverts the user's edits. (The `$: if (selectedId) prepareEditing`
+      // reactive only depends on selectedId, so it does NOT re-run on a config
+      // change either — load() is the only path that refreshes editing after
+      // save.)
+      setEditingFrom(cfg.profiles.find((p) => p.id === selectedId) ?? null);
     } catch (e: any) {
       errorText = "加载配置失败：" + (e?.message ?? e);
     }
   }
 
-  function prepareEditing() {
-    if (selected) {
-      editing = JSON.parse(JSON.stringify(selected));
-    } else {
-      editing = null;
-    }
+  function setEditingFrom(src: Profile | null) {
+    editing = src ? JSON.parse(JSON.stringify(src)) : null;
     fieldErrors = {};
     errorText = "";
+  }
+
+  function prepareEditing() {
+    // Used by the profile-switch reactive ($: if (selectedId)). At that point
+    // `selected` has already recomputed (topological order), so it's fresh.
+    setEditingFrom(selected);
   }
 
   $: if (selectedId) prepareEditing();
@@ -179,13 +188,16 @@
     const parts = body.split(";");
     const fe: Record<string, string> = {};
     for (const p of parts) {
-      const m = p.trim().match(/^(profiles\[[^\]]*\](?:\.rules\[[^\]]*\]\.[a-zA-Z]+)?)/);
-      if (m) fe[m[1]] = p.trim();
+      // Normalize the key to rules[idx].field regardless of which profiles[N]
+      // the backend references — the editor only shows one profile at a time,
+      // so the profile index is irrelevant for matching field errors to rows.
+      const m = p.trim().match(/^profiles\[\d+\]\.rules\[(\d+)\]\.([a-zA-Z]+)/);
+      if (m) fe[`rules[${m[1]}].${m[2]}`] = p.trim();
     }
     fieldErrors = fe;
   }
   function ruleErr(idx: number, field: string) {
-    return fieldErrors[`profiles[0].rules[${idx}].${field}`] ?? "";
+    return fieldErrors[`rules[${idx}].${field}`] ?? "";
   }
 </script>
 
