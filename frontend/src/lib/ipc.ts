@@ -2,6 +2,7 @@
 // and centralizes the call surface so pages don't import paths directly.
 import {
   IsElevated,
+  IsMaximised,
   EngineActive,
   RelaunchElevated,
   AutoStartInstalled,
@@ -34,6 +35,7 @@ import {
 
 export const api = {
   isElevated: () => IsElevated(),
+  isMaximised: () => IsMaximised(),
   engineActive: () => EngineActive(),
   relaunchElevated: () => RelaunchElevated(),
   autoStartInstalled: () => AutoStartInstalled(),

@@ -17,6 +17,7 @@ import type {
 } from "../models";
 
 export function IsElevated(): Promise<boolean>;
+export function IsMaximised(): Promise<boolean>;
 export function EngineActive(): Promise<boolean>;
 export function RelaunchElevated(): Promise<void>;
 export function AutoStartInstalled(): Promise<boolean>;

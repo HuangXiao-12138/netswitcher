@@ -27,6 +27,7 @@
   let status: StatusResponse | null = null;
   let busy = false;
   let elevationDismissed = false;
+  let maximised = false;
 
   async function refreshState() {
     checking = true;
@@ -34,9 +35,16 @@
       elevated = await api.isElevated().catch(() => false);
       engineActive = await api.engineActive().catch(() => false);
       autoStart = await api.autoStartInstalled().catch(() => false);
+      maximised = await api.isMaximised().catch(() => false);
     } finally {
       checking = false;
     }
+  }
+
+  async function toggleMax() {
+    await wc.toggleMax();
+    // Update the icon after the toggle lands.
+    setTimeout(async () => { maximised = await api.isMaximised().catch(() => false); }, 60);
   }
 
   async function loadStatus() {
@@ -111,7 +119,9 @@
     </div>
     <div class="win-ctrl">
       <button class="win-btn" title="最小化" on:click={wc.minimise}><span class="ico-min"></span></button>
-      <button class="win-btn" title="最大化/还原" on:click={wc.toggleMax}><span class="ico-max"></span></button>
+      <button class="win-btn" title={maximised ? "还原" : "最大化"} on:click={toggleMax}>
+        {#if maximised}<span class="ico-restore"></span>{:else}<span class="ico-max"></span>{/if}
+      </button>
       <button class="win-btn close" title="最小化到托盘" on:click={wc.hide}><span class="ico-close"></span></button>
     </div>
   </div>
@@ -186,6 +196,8 @@
 <style>
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
+    /* Right padding is 0 so the window buttons sit flush at the edge (Windows
+       convention); buttons keep their own hit area via fixed width. */
     padding: 8px 0 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
     /* Wails frameless drag uses the --wails-draggable CSS property (NOT
        -webkit-app-region). Any descendant that should be clickable must
@@ -223,8 +235,15 @@
   .win-btn:hover { background: var(--bg-3); color: var(--text); }
   .win-btn.close:hover { background: #e81123; color: #fff; }
   .win-btn span { display: inline-block; }
-  .ico-min { width: 12px; height: 1px; background: currentColor; }
-  .ico-max { width: 11px; height: 11px; border: 1px solid currentColor; }
+  .ico-min { width: 12px; height: 1.5px; background: currentColor; }
+  .ico-max { width: 11px; height: 11px; border: 1.5px solid currentColor; }
+  /* Restore: two overlapping squares (the maximized → normal indicator). */
+  .ico-restore { width: 14px; height: 14px; position: relative; }
+  .ico-restore::before, .ico-restore::after {
+    content: ""; position: absolute; width: 9px; height: 9px; border: 1.5px solid currentColor;
+  }
+  .ico-restore::before { left: 0; top: 4px; }
+  .ico-restore::after { left: 4px; top: 0; background: var(--bg-1); }
   .ico-close {
     width: 14px; height: 14px; position: relative;
   }

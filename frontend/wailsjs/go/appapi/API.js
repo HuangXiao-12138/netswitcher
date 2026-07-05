@@ -15,6 +15,10 @@ export function IsElevated() {
   return window.go.appapi.API.IsElevated();
 }
 
+export function IsMaximised() {
+  return window.go.appapi.API.IsMaximised();
+}
+
 export function EngineActive() {
   return window.go.appapi.API.EngineActive();
 }

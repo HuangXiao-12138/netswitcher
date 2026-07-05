@@ -407,6 +407,15 @@ func (a *API) showWindow() {
 	}
 }
 
+// IsMaximised reports the window's maximize state so the frontend can show a
+// restore icon instead of maximize when already maximized.
+func (a *API) IsMaximised() bool {
+	if a.ctx == nil {
+		return false
+	}
+	return runtime.WindowIsMaximised(a.ctx)
+}
+
 func (a *API) applyNow() {
 	if _, err := a.ApplyNow(); err != nil {
 		a.log.Warn("tray apply-now failed", "err", err)
