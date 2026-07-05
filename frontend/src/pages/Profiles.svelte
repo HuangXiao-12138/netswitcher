@@ -81,7 +81,7 @@
         ...editing.rules,
         {
           id: "r" + (editing.rules.length + 1) + "-" + Math.random().toString(36).slice(2, 6),
-          destination: "10.0.0.0/24",
+          destination: "",
           viaInterface: interfaces[0]?.Name ?? "",
           viaGateway: "auto",
           metric: 1,
@@ -289,7 +289,7 @@
                   {#each editing.rules as r, i}
                     <tr>
                       <td>
-                        <input class="cell mono {ruleErr(i, 'destination') ? 'invalid' : ''}" value={r.destination} on:input={(e) => ruleField(i, "destination", e.currentTarget.value)} />
+                        <input class="cell mono {ruleErr(i, 'destination') ? 'invalid' : ''}" value={r.destination} placeholder="如 168.168.0.0/16" on:input={(e) => ruleField(i, "destination", e.currentTarget.value)} />
                         {#if ruleErr(i, "destination")}<div class="field-err">{ruleErr(i, "destination")}</div>{/if}
                       </td>
                       <td>

@@ -226,7 +226,10 @@ func (a *API) DeleteProfile(id string) error {
 		return errEngine
 	}
 	cfg := *a.core.Config()
-	out := cfg.Profiles[:0]
+	// Build a NEW slice — don't reuse the backing array (cfg.Profiles[:0]
+	// would share memory with the live config, risking a race if applyOnce
+	// reads it concurrently).
+	var out []config.Profile
 	for _, p := range cfg.Profiles {
 		if p.ID != id {
 			out = append(out, p)
