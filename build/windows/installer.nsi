@@ -1,112 +1,108 @@
-; NetSwitcher NSIS installer (spec §7 Phase 7).
-; Build with:  makensis build/windows/installer.nsi
-; (run from repo root after `make build` produced netswitcher.exe).
-;
-; Requirements: NSIS 3.x. WebView2 EverBootstrapper is optional — bundle
-; MicrosoftEdgeWebView2Setup.exe next to this script for Win10 fallback.
+; NetSwitcher Windows Installer (NSIS)
+; Build:  makensis build\windows\installer.nsi  (from repo root)
+; Output: build\bin\NetSwitcher-Setup.exe
+; ASCII-only to avoid encoding issues on CJK Windows.
 
-!include "MUI2.nsh"
-!include "LogicLib.nsh"
-!include "x64.nsh"
-!include "WinVer.nsh"
+!define APPNAME "NetSwitcher"
+!define APPVERSION "0.1.0"
+!define WEBVIEW2_REGKEY "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\{F3017226-FE2A-4295-8BDF-00C3A9A7E4C5}"
 
-Name "NetSwitcher"
-OutFile "..\..\dist\NetSwitcher-Setup.exe"
-Unicode True
-ShowInstDetails show
-ShowUnInstDetails show
+Unicode true
 SetCompressor /SOLID lzma
+
+Name "${APPNAME} ${APPVERSION}"
+OutFile "..\bin\NetSwitcher-Setup.exe"
+InstallDir "$PROGRAMFILES64\${APPNAME}"
+InstallDirRegKey HKLM "Software\${APPNAME}" "InstallDir"
 RequestExecutionLevel admin
 
-InstallDir "$PROGRAMFILES64\NetSwitcher"
-InstallDirRegKey HKLM "Software\NetSwitcher" "InstallDir"
-
-VIProductVersion "0.1.0.0"
-VIAddVersionKey "ProductName" "NetSwitcher"
-VIAddVersionKey "CompanyName" "NetSwitcher"
-VIAddVersionKey "LegalCopyright" "Copyright (c) 2026 NetSwitcher"
-VIAddVersionKey "FileDescription" "NetSwitcher Installer"
-VIAddVersionKey "FileVersion" "0.1.0"
-VIAddVersionKey "ProductVersion" "0.1.0"
-
-; ---- Modern UI ----
+!include "MUI2.nsh"
+!include "FileFunc.nsh"
 !define MUI_ABORTWARNING
-!define MUI_ICON "icon.ico"
-!define MUI_UNICON "icon.ico"
+!define MUI_ICON "..\windows\icon.ico"
+!define MUI_FINISHPAGE_RUN "$INSTDIR\netswitcher.exe"
+!define MUI_FINISHPAGE_RUN_TEXT "Launch ${APPNAME}"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
-!insertmacro MUI_UNPAGE_WELCOME
 !insertmacro MUI_UNPAGE_CONFIRM
 !insertmacro MUI_UNPAGE_INSTFILES
-!insertmacro MUI_UNPAGE_FINISH
-!insertmacro MUI_LANGUAGE "SimpChinese"
 !insertmacro MUI_LANGUAGE "English"
-!insertmacro MUI_RESERVEFILE_LANGDLL
 
-Section "NetSwitcher (required)" SecCore
+VIProductVersion "0.1.0.0"
+VIAddVersionKey "ProductName" "${APPNAME}"
+VIAddVersionKey "FileVersion" "${APPVERSION}"
+VIAddVersionKey "ProductVersion" "${APPVERSION}"
+VIAddVersionKey "CompanyName" "NetSwitcher"
+VIAddVersionKey "FileDescription" "Network route manager"
+
+Section "Install" SecInstall
   SectionIn RO
   SetOutPath "$INSTDIR"
-  File "..\..\netswitcher.exe"
-  File /nonfatal "icon.ico"
+  File "..\..\build\bin\netswitcher.exe"
+  File "MicrosoftEdgeWebview2Setup.exe"
 
-  ; Write uninstaller + registry entries.
-  WriteUninstaller "$INSTDIR\Uninstall.exe"
-  WriteRegStr HKLM "Software\NetSwitcher" "InstallDir" "$INSTDIR"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher" \
-                 "DisplayName" "NetSwitcher"
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher" \
-                 "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
-  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher" \
-                 "DisplayVersion" "0.1.0"
-  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher" \
-                 "NoModify" 1
-  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher" \
-                 "NoRepair" 1
+  ; --- WebView2 runtime: detect / install ---
+  ReadRegStr $0 HKLM "${WEBVIEW2_REGKEY}" "pv"
+  StrCmp $0 "" +3 0        ; empty -> install (jump +3 past the next check)
+  StrCmp $0 "0.0.0.0" +2 0 ; placeholder -> install
+  Goto webview2_done       ; has version -> skip
 
-  ; Shortcuts (GUI). Start menu + desktop.
-  CreateDirectory "$SMPROGRAMS\NetSwitcher"
-  CreateShortCut "$SMPROGRAMS\NetSwitcher\NetSwitcher.lnk" "$INSTDIR\netswitcher.exe" "gui" "$INSTDIR\icon.ico"
-  CreateShortCut "$SMPROGRAMS\NetSwitcher\卸载 NetSwitcher.lnk" "$INSTDIR\Uninstall.exe"
-  CreateShortCut "$DESKTOP\NetSwitcher.lnk" "$INSTDIR\netswitcher.exe" "gui" "$INSTDIR\icon.ico"
+  DetailPrint "WebView2 not found, installing silently..."
+  nsExec::Exec '"$INSTDIR\MicrosoftEdgeWebview2Setup.exe" /silent /install'
+  Pop $R0
+  DetailPrint "WebView2 install exit code: $R0"
 
-  ; WebView2 EverBootstrapper (bundled file is optional; no-op if runtime
-  ; already present). Needed for older Win10 builds without WebView2.
-  IfFileExists "$INSTDIR\MicrosoftEdgeWebview2Setup.exe" 0 skipWebview
-    DetailPrint "Ensuring WebView2 runtime..."
-    nsExec::ExecToLog '$INSTDIR\MicrosoftEdgeWebview2Setup.exe /silent /install'
-  skipWebview:
+  webview2_done:
+  Delete "$INSTDIR\MicrosoftEdgeWebview2Setup.exe"
 
-  ; Install + start the service (the installer is already elevated).
-  DetailPrint "Installing NetSwitcher service..."
-  nsExec::ExecToLog '"$INSTDIR\netswitcher.exe" service install'
-  DetailPrint "Starting NetSwitcher service..."
-  nsExec::ExecToLog '"$INSTDIR\netswitcher.exe" service start'
+  ; --- Data dir ---
+  ReadEnvStr $R1 "PROGRAMDATA"
+  CreateDirectory "$R1\${APPNAME}\logs"
+
+  ; --- Shortcuts ---
+  CreateDirectory "$SMPROGRAMS\${APPNAME}"
+  CreateShortCut "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk" "$INSTDIR\netswitcher.exe" "" "$INSTDIR\netswitcher.exe" 0
+  CreateShortCut "$DESKTOP\${APPNAME}.lnk" "$INSTDIR\netswitcher.exe" "" "$INSTDIR\netswitcher.exe" 0
+  CreateShortCut "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk" "$INSTDIR\uninstall.exe" "" "" 0
+
+  ; --- Uninstall entry ---
+  WriteRegStr HKLM "Software\${APPNAME}" "InstallDir" "$INSTDIR"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayName" "${APPNAME}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "UninstallString" '"$INSTDIR\uninstall.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayIcon" '"$INSTDIR\netswitcher.exe"'
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "DisplayVersion" "${APPVERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "Publisher" "NetSwitcher"
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoModify" 1
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "NoRepair" 1
+  ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+  IntFmt $0 "0x%08X" $0
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}" "EstimatedSize" "$0"
+
+  WriteUninstaller "$INSTDIR\uninstall.exe"
 SectionEnd
 
 Section "Uninstall"
-  ; Stop + remove the service first (best effort).
-  DetailPrint "Stopping NetSwitcher service..."
-  nsExec::ExecToLog '"$INSTDIR\netswitcher.exe" service stop'
-  DetailPrint "Removing NetSwitcher service..."
-  nsExec::ExecToLog '"$INSTDIR\netswitcher.exe" service uninstall'
+  nsExec::ExecToLog 'taskkill /F /IM netswitcher.exe'
+  Sleep 1000
 
   Delete "$INSTDIR\netswitcher.exe"
-  Delete "$INSTDIR\icon.ico"
-  Delete "$INSTDIR\Uninstall.exe"
+  Delete "$INSTDIR\uninstall.exe"
+  Delete "$INSTDIR\MicrosoftEdgeWebview2Setup.exe"
   RMDir "$INSTDIR"
 
-  Delete "$SMPROGRAMS\NetSwitcher\NetSwitcher.lnk"
-  Delete "$SMPROGRAMS\NetSwitcher\卸载 NetSwitcher.lnk"
-  RMDir "$SMPROGRAMS\NetSwitcher"
-  Delete "$DESKTOP\NetSwitcher.lnk"
+  Delete "$SMPROGRAMS\${APPNAME}\${APPNAME}.lnk"
+  Delete "$SMPROGRAMS\${APPNAME}\Uninstall ${APPNAME}.lnk"
+  RMDir "$SMPROGRAMS\${APPNAME}"
+  Delete "$DESKTOP\${APPNAME}.lnk"
 
-  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\NetSwitcher"
-  DeleteRegKey HKLM "Software\NetSwitcher"
+  nsExec::ExecToLog 'schtasks /Delete /F /TN "${APPNAME}"'
 
-  ; Ask whether to remove configuration + state (default: keep).
-  MessageBox MB_YESNO|MB_DEFBUTTON2 "同时删除配置与状态 ($PROGRAMDATA\NetSwitcher)？" IDNO end
-    RMDir /r "$PROGRAMDATA\NetSwitcher"
-  end:
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APPNAME}"
+  DeleteRegKey HKLM "Software\${APPNAME}"
+
+  ReadEnvStr $R1 "PROGRAMDATA"
+  MessageBox MB_YESNO|MB_ICONQUESTION "Also delete configuration and logs?$\n$\n$R1\${APPNAME}\" IDNO +2
+    RMDir /r "$R1\${APPNAME}"
 SectionEnd
