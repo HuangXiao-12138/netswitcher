@@ -5,7 +5,6 @@ package gui
 import (
 	"context"
 	"embed"
-	_ "embed"
 	"log/slog"
 
 	"github.com/netswitcher/netswitcher/appapi"
