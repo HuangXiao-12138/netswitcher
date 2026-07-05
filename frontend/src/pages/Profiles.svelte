@@ -8,6 +8,8 @@
   let selectedId = "";
   let editing: Profile | null = null;
   let saving = false;
+  let deleting = false;
+  let pendingDelete = false;
   let errorText = "";
   let fieldErrors: Record<string, string> = {};
 
@@ -107,14 +109,29 @@
     }
   }
 
-  async function deleteProfile() {
-    if (!editing || !config) return;
-    if (!confirm(`删除配置 "${editing.name}"？`)) return;
+  function deleteProfile() {
+    if (!editing) return;
+    // Show the styled confirmation modal (Wails/WebView2 blocks the native
+    // JS confirm() dialog, so we use our own).
+    pendingDelete = true;
+  }
+
+  async function confirmDelete() {
+    if (!editing) return;
+    pendingDelete = false;
+    deleting = true;
+    errorText = "";
     try {
       await api.deleteProfile(editing.id);
+      // If the deleted one was selected, fall back to the first remaining
+      // profile (or clear selection if none remain).
+      const rest = (config?.profiles ?? []).filter((p) => p.id !== editing!.id);
+      selectedId = rest.length ? rest[0].id : "";
       await load();
     } catch (e: any) {
       parseError(e);
+    } finally {
+      deleting = false;
     }
   }
 
@@ -259,13 +276,33 @@
       <div class="actions">
         <button class="primary" on:click={save} disabled={saving}>{saving ? "保存中…" : "保存"}</button>
         <button on:click={setActive} disabled={editing.id === activeId}>设为活动</button>
-        <button class="danger" on:click={deleteProfile} disabled={config?.profiles.length === 1}>删除</button>
+        <button class="danger" on:click={deleteProfile} disabled={deleting}>{deleting ? "删除中…" : "删除"}</button>
       </div>
     {:else}
       <p class="muted">从左侧选择一个配置，或新建一个。</p>
     {/if}
   </div>
 </div>
+
+{#if pendingDelete}
+  <div class="modal-backdrop" on:click={() => (pendingDelete = false)}>
+    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
+      <h3>删除配置</h3>
+      <p>确定删除配置 <strong>“{editing?.name}”</strong> 吗？</p>
+      <ul class="modal-bullets">
+        <li>该 profile 下的所有规则一并删除</li>
+        <li>如果它是活动配置，活动状态会清空（路由回退到系统默认）</li>
+        <li>操作不可撤销</li>
+      </ul>
+      <div class="modal-actions">
+        <button on:click={() => (pendingDelete = false)} disabled={deleting}>取消</button>
+        <button class="danger" on:click={confirmDelete} disabled={deleting}>
+          {deleting ? "删除中…" : "确认删除"}
+        </button>
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
@@ -298,4 +335,19 @@
   .rules-head { display: flex; align-items: center; justify-content: space-between; margin: 14px 0 8px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .actions { display: flex; gap: 8px; margin-top: 16px; }
+
+  /* Delete confirmation modal. */
+  .modal-backdrop {
+    position: fixed; inset: 0; background: rgba(8,10,15,0.72);
+    display: flex; align-items: center; justify-content: center; z-index: 60;
+  }
+  .modal {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 24px 26px; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .modal h3 { margin: 0 0 10px; font-size: 16px; text-transform: none; letter-spacing: 0; color: var(--text); }
+  .modal p { margin: 6px 0; font-size: 13px; line-height: 1.55; }
+  .modal-bullets { margin: 8px 0; padding-left: 20px; font-size: 12px; color: var(--text-dim); line-height: 1.7; }
+  .modal-bullets li::marker { color: var(--bad); }
+  .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
 </style>
