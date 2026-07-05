@@ -36,9 +36,9 @@
     return { cls: "good", text: "已连接" };
   }
 
-  function dismissConflict(c: Conflict) {
+  function dismissAll() {
     dismissed = new Set(dismissed);
-    dismissed.add(conflictSig(c));
+    for (const c of allConflicts) dismissed.add(conflictSig(c));
   }
 </script>
 
@@ -63,14 +63,16 @@
 
 {#if conflicts.length > 0}
   <div class="conflicts">
-    <h3>网络提示 ({conflicts.length})</h3>
+    <div class="conflicts-head">
+      <h3>网络提示 ({conflicts.length})</h3>
+      <button class="dismiss-all" title="本次会话不再显示这些提示" on:click={dismissAll}>全部忽略</button>
+    </div>
     {#each conflicts as c}
       <div class="conflict-row">
         <span class="tag {c.type === 'vpn_present' ? 'vpn' : 'warn'}">
           {c.type === "vpn_present" ? "VPN" : "外部覆盖"}
         </span>
         <span class="conflict-text">{c.description}</span>
-        <button class="dismiss" title="本次会话不再显示" on:click={() => dismissConflict(c)}>×</button>
       </div>
     {/each}
   </div>
@@ -160,10 +162,12 @@
   h3 { margin: 18px 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .conflicts { background: rgba(192,132,252,0.06); border: 1px solid rgba(192,132,252,0.25); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }
   .conflicts h3 { margin: 0 0 8px; } /* override the 18px section-title top margin */
+  .conflicts-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .conflicts-head h3 { margin: 0; }
+  .dismiss-all { background: transparent; border: 1px solid var(--border); color: var(--text-dim); font-size: 11px; padding: 3px 9px; border-radius: var(--radius-sm); cursor: pointer; }
+  .dismiss-all:hover { color: var(--text); border-color: var(--text-dim); }
   .conflict-row { display: flex; align-items: center; gap: 10px; padding: 4px 0; font-size: 13px; }
   .conflict-text { flex: 1; }
-  .dismiss { background: transparent; border: none; color: var(--text-faint); font-size: 16px; line-height: 1; padding: 0 6px; cursor: pointer; }
-  .dismiss:hover { color: var(--text); }
   .muted-bar { color: var(--text-faint); font-size: 12px; }
   .iface-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
   .iface.down { opacity: 0.6; }
