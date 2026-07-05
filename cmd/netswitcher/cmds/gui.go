@@ -24,6 +24,11 @@ func runGUI(version string) error {
 	}
 
 	infof("NetSwitcher GUI 启动")
+	// Put this process in a kill-on-close Job Object so webview2 children die
+	// with us on crash / taskkill (no orphans).
+	if err := winutil.AssignSelfToKillOnCloseJob(); err != nil {
+		infof("warning: job object not applied: %v", err)
+	}
 	err := gui.Run(gui.Options{Title: "NetSwitcher", Width: 1024, Height: 700, Version: version})
 	if err == nil {
 		return nil
