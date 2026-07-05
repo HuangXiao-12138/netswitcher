@@ -101,17 +101,19 @@
   function resolvedGatewayFor(ifaceName: string): string {
     return interfaces.find((ifc) => ifc.Name === ifaceName)?.Gateways?.[0] ?? "";
   }
-  // Switch a rule's gateway between auto and explicit-IP. Going to "specify"
-  // seeds the input with the currently-resolved gateway so the user has a
-  // starting value instead of an empty box.
-  function toggleGateway(idx: number) {
+  // Gateway field is mode-driven via a <select>: "auto" (resolve from the
+  // NIC) or "custom" (explicit IP). Switching to custom seeds the input with
+  // the currently-resolved gateway so there's a starting value.
+  function gatewayMode(gw: string): "auto" | "custom" {
+    return isAutoGateway(gw) ? "auto" : "custom";
+  }
+  function setGatewayMode(idx: number, mode: "auto" | "custom") {
     if (!editing) return;
     const r = editing.rules[idx];
-    if (isAutoGateway(r.viaGateway)) {
-      const resolved = resolvedGatewayFor(r.viaInterface);
-      ruleField(idx, "viaGateway", resolved || "");
-    } else {
+    if (mode === "auto") {
       ruleField(idx, "viaGateway", "auto");
+    } else if (isAutoGateway(r.viaGateway)) {
+      ruleField(idx, "viaGateway", resolvedGatewayFor(r.viaInterface) || "");
     }
   }
 
@@ -275,12 +277,16 @@
                         </select>
                       </td>
                       <td>
-                        {#if isAutoGateway(r.viaGateway)}
-                          <span class="gw"><span class="resolved">{resolvedGatewayFor(r.viaInterface) || '—'}</span><button class="switch-link" on:click={() => toggleGateway(i)}>指定 IP</button></span>
-                        {:else}
-                          <span class="gw"><input class="cell mono gw-input {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} /><button class="switch-link" on:click={() => toggleGateway(i)}>改自动</button></span>
-                          {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
-                        {/if}
+                        <div class="gw">
+                          <select class="cell gw-mode" value={gatewayMode(r.viaGateway)} on:change={(e) => setGatewayMode(i, e.currentTarget.value as "auto" | "custom")}>
+                            <option value="auto">auto（{resolvedGatewayFor(r.viaInterface) || "—"}）</option>
+                            <option value="custom">自定义 IP…</option>
+                          </select>
+                          {#if gatewayMode(r.viaGateway) === "custom"}
+                            <input class="cell mono gw-ip {ruleErr(i, 'viaGateway') ? 'invalid' : ''}" value={r.viaGateway} placeholder="如 192.168.1.1" on:input={(e) => ruleField(i, "viaGateway", e.currentTarget.value)} />
+                            {#if ruleErr(i, "viaGateway")}<div class="field-err">{ruleErr(i, "viaGateway")}</div>{/if}
+                          {/if}
+                        </div>
                       </td>
                       <td><input class="cell mono metric" type="number" min="1" value={r.metric ?? 1} on:input={(e) => ruleField(i, "metric", +e.currentTarget.value)} /></td>
                       <td><span class="toggle-sw" class:off={r.enabled === false} on:click={() => ruleField(i, "enabled", !(r.enabled !== false))} role="switch" tabindex="0"></span></td>
@@ -447,16 +453,14 @@
   th { font-size: 11px; font-weight: 600; color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.06em; background: var(--bg-2); }
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
-  .col-dest { width: 22%; } .col-if { width: 16%; } .col-gw { width: 24%; } .col-m { width: 10%; } .col-en { width: 8%; }
+  .col-dest { width: 20%; } .col-if { width: 14%; } .col-gw { width: 30%; } .col-m { width: 9%; } .col-en { width: 8%; }
   .cell { width: 100%; box-sizing: border-box; background: var(--bg-0); border: 1px solid var(--border-soft); color: var(--text); padding: 5px 8px; font-size: 12.5px; border-radius: 4px; outline: none; font-family: inherit; }
   .cell.mono { font-family: var(--font-mono); }
   .cell:focus { border-color: var(--accent); }
   .cell.invalid { border-color: var(--bad); }
-  .gw { display: inline-flex; align-items: center; gap: 8px; width: 100%; }
-  .gw .resolved { font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); }
-  .gw-input { width: 110px; flex: 0 0 auto; }
-  .switch-link { font-size: 11px; color: var(--text-faint); cursor: pointer; text-decoration: underline dotted; border: none; background: none; padding: 0; font-family: inherit; }
-  .switch-link:hover { color: var(--accent); }
+  .gw { display: flex; align-items: center; gap: 6px; width: 100%; flex-wrap: wrap; }
+  .gw-mode { flex: 1 1 auto; min-width: 130px; }
+  .gw-ip { width: 120px; flex: 0 0 auto; }
   .metric { width: 60px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
   .toggle-sw {
