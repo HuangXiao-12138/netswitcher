@@ -74,44 +74,44 @@
   }
 </script>
 
-<div class="head">
-  <h2>日志</h2>
-  <div class="controls">
-    <select bind:value={level} on:change={subscribe}>
-      {#each levels as l}<option value={l}>{l}</option>{/each}
-    </select>
-    <input placeholder="过滤…" bind:value={filter} />
-    <button class="ghost" on:click={() => (entries = [])}>清空</button>
+<div class="logs-page">
+  <div class="head">
+    <h2>日志</h2>
+    <div class="controls">
+      <select bind:value={level} on:change={subscribe}>
+        {#each levels as l}<option value={l}>{l}</option>{/each}
+      </select>
+      <input placeholder="过滤…" bind:value={filter} />
+      <button class="ghost" on:click={() => (entries = [])}>清空</button>
+    </div>
+  </div>
+
+  <div class="card log-list" bind:this={listEl} on:scroll={onScroll}>
+    {#each visible as e}
+      <div class="log-row">
+        <span class="log-time">{e.time ? new Date(e.time).toLocaleTimeString() : ""}</span>
+        <span class="tag {levelColor(e.level)}">{(e.level ?? "INFO").toUpperCase()}</span>
+        <span class="log-msg">{e.msg}</span>
+        {#if Object.keys(e).length > 3}
+          <span class="log-attrs mono">{JSON.stringify({ ...e, time: undefined, level: undefined, msg: undefined })}</span>
+        {/if}
+      </div>
+    {:else}
+      <div class="faint" style="padding:8px">{loading ? "加载历史日志…" : `等待日志…（级别 ≥ ${level}）`}</div>
+    {/each}
   </div>
 </div>
 
-<div class="card log-list" bind:this={listEl} on:scroll={onScroll}>
-  {#each visible as e}
-    <div class="log-row">
-      <span class="log-time">{e.time ? new Date(e.time).toLocaleTimeString() : ""}</span>
-      <span class="tag {levelColor(e.level)}">{(e.level ?? "INFO").toUpperCase()}</span>
-      <span class="log-msg">{e.msg}</span>
-      {#if Object.keys(e).length > 3}
-        <span class="log-attrs mono">{JSON.stringify({ ...e, time: undefined, level: undefined, msg: undefined })}</span>
-      {/if}
-    </div>
-  {:else}
-    <div class="faint" style="padding:8px">{loading ? "加载历史日志…" : `等待日志…（级别 ≥ ${level}）`}</div>
-  {/each}
-</div>
-
 <style>
-  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; }
+  /* height:100% resolves against .content's definite (flex-resolved) height,
+     so the page fills exactly without making .content overflow/scroll. The
+     head takes its natural height; the log-list flexes to fill the rest and
+     scrolls internally (single scrollbar, pinned to this element). */
+  .logs-page { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; gap: 12px; flex-shrink: 0; }
   h2 { margin: 0; font-size: 18px; }
   .controls { display: flex; gap: 8px; }
-  /* Fill the viewport instead of capping at 65vh (which left a large gap below).
-     170px ≈ window title bar + content padding + the head row above. */
-  .log-list {
-    height: calc(100vh - 170px);
-    min-height: 220px;
-    overflow: auto;
-    background: #07090d;
-  }
+  .log-list { flex: 1; min-height: 0; overflow: auto; background: #07090d; }
   .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 2px 6px; font-size: 12px; }
   .log-row:hover { background: var(--bg-1); }
   .log-time { color: var(--text-faint); font-family: var(--font-mono); width: 70px; flex-shrink: 0; }
