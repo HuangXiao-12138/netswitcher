@@ -46,8 +46,14 @@
   <div>
     <h2>状态</h2>
     <div class="muted" style="margin-top:2px">
-      活动配置：<strong>{status?.activeProfile?.name ?? "（无）"}</strong>
-      <span class="faint">({status?.activeProfile?.id ?? "—"})</span>
+      活动配置：
+      {#if status?.activeProfile}
+        <strong>{status.activeProfile.name}</strong>
+        <span class="faint">({status.activeProfile.id})</span>
+      {:else}
+        <strong>（无）</strong>
+        <span class="faint">— 未配置自动分流，路由走系统默认</span>
+      {/if}
     </div>
   </div>
   <button class="primary" on:click={applyNow} disabled={!serviceUp || applying}>

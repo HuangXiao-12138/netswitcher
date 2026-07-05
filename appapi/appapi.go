@@ -86,10 +86,9 @@ func (a *API) OnStartup(ctx context.Context) {
 	_, _ = logging.Configure("info", logDir)
 	logging.SetPipeSink(a.logFan)
 
-	go a.subscribeStatusLoop(ctx)
-	// Second-instance signal: when another copy launches, it sets the show
-	// event; bring this window to the front.
 	go func() {
+		// Second-instance signal: when another copy launches, it sets the show
+		// event; bring this window to the front.
 		ch := winutil.WaitSingletonShow()
 		for range ch {
 			if a.ctx != nil {
@@ -103,6 +102,9 @@ func (a *API) OnStartup(ctx context.Context) {
 	if a.elevated {
 		a.startEngine()
 	}
+	// NOTE: subscribeStatusLoop is started inside startEngine (after a.core
+	// exists). Launching it here raced startEngine and saw a.core == nil →
+	// returned early → never subscribed → frontend got no status pushes.
 }
 
 // startEngine brings up the in-process route engine (core). Idempotent.
@@ -130,6 +132,11 @@ func (a *API) startEngine() {
 	// choice survives restarts.
 	if lvl := c.Config().LogLevel; lvl != "" {
 		logging.SetLevel(lvl)
+	}
+	// Subscribe to status pushes now that core exists (must run AFTER a.core
+	// is set, else the goroutine races OnStartup and sees nil).
+	if a.ctx != nil {
+		go a.subscribeStatusLoop(a.ctx)
 	}
 	a.log.Info("embedded engine started (elevated)", "pid", os.Getpid())
 }

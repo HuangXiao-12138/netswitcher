@@ -94,11 +94,12 @@
     editing = { ...editing, rules };
   }
 
-  // viaGateway accepts "auto" (use the NIC's primary gateway) or a literal
-  // IPv4. Empty counts as auto to match config.applyDefaults. The gateway
-  // cell uses this to switch between the two modes.
+  // viaGateway is "auto" (use the NIC's primary gateway) or a literal IPv4.
+  // Loaded configs are normalized by config.applyDefaults, so "" only appears
+  // transiently after clicking "指定 IP" — it means "specify mode, awaiting
+  // input", not auto. Without this distinction the 切换 button silently no-ops.
   function isAutoGateway(gw: string): boolean {
-    return !gw || gw.toLowerCase() === "auto";
+    return gw.toLowerCase() === "auto";
   }
 
   function resolvedGatewayFor(ifaceName: string): string {
