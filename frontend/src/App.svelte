@@ -113,7 +113,7 @@
       {#if !elevated}
         <span class="pill down"><span class="dot"></span>未提权</span>
       {:else if engineActive}
-        <span class="pill up"><span class="dot"></span>管理员·引擎在线</span>
+        <span class="pill up"><span class="dot"></span>路由引擎在线</span>
       {:else}
         <span class="pill warn"><span class="dot"></span>引擎未启动</span>
       {/if}
