@@ -15,6 +15,7 @@ import (
 
 	"github.com/netswitcher/netswitcher/internal/config"
 	"github.com/netswitcher/netswitcher/internal/ifacemgr"
+	"github.com/netswitcher/netswitcher/internal/nrpt"
 	"github.com/netswitcher/netswitcher/internal/state"
 )
 
@@ -41,6 +42,12 @@ type MetricChange struct {
 	NewMetric int    `json:"newMetric"`
 }
 
+// NrptChange records an NRPT add/remove (domain-suffix → DNS server rule).
+type NrptChange struct {
+	Namespace string `json:"namespace"`
+	Op        string `json:"op"` // "add" | "remove"
+}
+
 // ApplyResult is the outcome of one Apply pass. Applied/Removed are routes
 // actually changed; Skipped/Errors are advisories. Conflicts come from the
 // conflict detector (§7.7) and are attached by the caller (core).
@@ -50,6 +57,7 @@ type ApplyResult struct {
 	Skipped []SkippedRule  `json:"skipped"`
 	Errors  []RuleError    `json:"errors"`
 	Metrics []MetricChange `json:"metrics"`
+	Nrpt    []NrptChange   `json:"nrpt"`
 	At      time.Time      `json:"at"`
 	Reason  string         `json:"reason"`
 }
@@ -58,16 +66,31 @@ type ApplyResult struct {
 type Engine struct {
 	exec    Executor
 	metrics MetricSetter
+	nrpt    nrpt.Setter // optional; nil = skip NRPT management
 	store   *state.Store
 	log     *slog.Logger
 }
 
+// Option configures an Engine (variadic, keeps New compatible with existing
+// callers that don't set NRPT).
+type Option func(*Engine)
+
+// WithNrpt attaches an NRPT Setter so Apply also reconciles domain-suffix DNS
+// rules (Add/Remove-DnsClientNrptRule).
+func WithNrpt(ns nrpt.Setter) Option {
+	return func(e *Engine) { e.nrpt = ns }
+}
+
 // New constructs an Engine. log may be nil (defaults to slog.Default()).
-func New(exec Executor, ms MetricSetter, store *state.Store, log *slog.Logger) *Engine {
+func New(exec Executor, ms MetricSetter, store *state.Store, log *slog.Logger, opts ...Option) *Engine {
 	if log == nil {
 		log = slog.Default()
 	}
-	return &Engine{exec: exec, metrics: ms, store: store, log: log}
+	e := &Engine{exec: exec, metrics: ms, store: store, log: log}
+	for _, o := range opts {
+		o(e)
+	}
+	return e
 }
 
 // Apply reconciles the system route table to the active profile. With a nil
@@ -91,9 +114,29 @@ func (e *Engine) Apply(profile *config.Profile, snap ifacemgr.Snapshot, reason s
 				res.Removed = append(res.Removed, r)
 			}
 		}
+		// Stop owning interface metrics too: restore every active interface
+		// to automatic metric so our preferred/others values don't linger
+		// after "停用". Without this, deactivating leaves WLAN=10 / others=50
+		// in place even though NetSwitcher is no longer managing routes.
+		if e.metrics != nil {
+			for _, ifc := range snap.Interfaces {
+				if !ifc.IsUp || len(ifc.IPv4) == 0 {
+					continue
+				}
+				if err := e.metrics.SetAutomaticMetric(ifc.Name); err != nil {
+					e.log.Warn("restore automatic metric failed", "iface", ifc.Name, "err", err)
+					continue
+				}
+				res.Metrics = append(res.Metrics, MetricChange{Interface: ifc.Name, NewMetric: -1})
+			}
+		}
+		// Tear down NRPT rules too — deactivating means we no longer own any
+		// domain-suffix DNS redirection.
+		_, nrptChanges := e.applyNrpt(nil, prev.NrptNamespaces)
+		res.Nrpt = nrptChanges
 		e.saveState(state.Snapshot{}, reason, &res)
 		res.At = time.Now()
-		e.log.Info("apply done (no profile)", "removed", len(res.Removed), "errors", len(res.Errors))
+		e.log.Info("apply done (no profile)", "removed", len(res.Removed), "errors", len(res.Errors), "metrics", len(res.Metrics), "nrpt", len(res.Nrpt))
 		return res
 	}
 
@@ -126,9 +169,13 @@ func (e *Engine) Apply(profile *config.Profile, snap ifacemgr.Snapshot, reason s
 		res.Metrics = e.applyMetrics(profile, snap)
 	}
 
+	// Reconcile NRPT (domain-suffix → DNS) rules: add new, remove obsolete.
+	nrptApplied, nrptChanges := e.applyNrpt(profile, prev.NrptNamespaces)
+	res.Nrpt = nrptChanges
+
 	// Persist the new baseline: (prev - removed) ∪ applied. Failed adds are
 	// NOT included so they retry next pass; failed removes stay in baseline.
-	e.saveState(state.Snapshot{Entries: mergeBaseline(prev.Entries, res.Removed, applied)}, reason, &res)
+	e.saveState(state.Snapshot{Entries: mergeBaseline(prev.Entries, res.Removed, applied), NrptNamespaces: nrptApplied}, reason, &res)
 
 	res.At = time.Now()
 	e.log.Info("apply done",
@@ -137,7 +184,8 @@ func (e *Engine) Apply(profile *config.Profile, snap ifacemgr.Snapshot, reason s
 		"removed", len(res.Removed),
 		"skipped", len(res.Skipped),
 		"errors", len(res.Errors),
-		"metrics", len(res.Metrics))
+		"metrics", len(res.Metrics),
+		"nrpt", len(res.Nrpt))
 	return res
 }
 
@@ -232,14 +280,8 @@ func (e *Engine) applyMetrics(profile *config.Profile, snap ifacemgr.Snapshot) [
 	}
 
 	preferredMetric := config.DefaultPreferredMetric
-	othersMetric := config.DefaultOthersMetric
-	if profile.MetricPolicy != nil {
-		if profile.MetricPolicy.PreferredMetric > 0 {
-			preferredMetric = profile.MetricPolicy.PreferredMetric
-		}
-		if profile.MetricPolicy.OthersMetric > 0 {
-			othersMetric = profile.MetricPolicy.OthersMetric
-		}
+	if profile.MetricPolicy != nil && profile.MetricPolicy.PreferredMetric > 0 {
+		preferredMetric = profile.MetricPolicy.PreferredMetric
 	}
 
 	preferredIfc, err := ifacemgr.ResolveByName(preferredName, snap)
@@ -247,27 +289,20 @@ func (e *Engine) applyMetrics(profile *config.Profile, snap ifacemgr.Snapshot) [
 		e.log.Warn("preferred interface not present; skipping metric management", "name", preferredName)
 		return nil
 	}
-	preferredIdx := preferredIfc.Index
-
-	var changes []MetricChange
-	for _, ifc := range snap.Interfaces {
-		if !ifc.IsUp || len(ifc.IPv4) == 0 {
-			continue
-		}
-		target := othersMetric
-		if ifc.Index == preferredIdx {
-			target = preferredMetric
-		}
-		if e.metrics == nil {
-			continue
-		}
-		if err := e.metrics.SetInterfaceMetric(ifc.Name, target); err != nil {
-			e.log.Warn("set metric failed", "iface", ifc.Name, "err", err)
-			continue
-		}
-		changes = append(changes, MetricChange{Interface: ifc.Name, NewMetric: target})
+	if e.metrics == nil {
+		return nil
 	}
-	return changes
+	// Only manage the preferred interface's metric. We intentionally do NOT
+	// touch other interfaces (VPN tunnels like xray_tun, virtual adapters) —
+	// that would override other apps' metric policies. preferred=10 is low
+	// enough to win the default route against system defaults (Ethernet ~25,
+	// WLAN ~45). othersMetric stays in the config for compatibility but is no
+	// longer applied.
+	if err := e.metrics.SetInterfaceMetric(preferredIfc.Name, preferredMetric); err != nil {
+		e.log.Warn("set metric failed", "iface", preferredIfc.Name, "err", err)
+		return nil
+	}
+	return []MetricChange{{Interface: preferredIfc.Name, NewMetric: preferredMetric}}
 }
 
 // saveState persists the new baseline, logging but not failing the apply on
@@ -294,4 +329,71 @@ func mergeBaseline(old, removed, added []state.Entry) []state.Entry {
 	}
 	out = append(out, added...)
 	return out
+}
+
+// applyNrpt reconciles NRPT (domain-suffix DNS) rules. want = profile's enabled
+// NrptRules (nil profile → want empty, remove everything previously applied).
+// Returns the namespaces now applied + a change log for the ApplyResult.
+//
+// A namespace is only Add-ed when it's not in prev, so a stable profile doesn't
+// re-Add every pass; name-server changes to an existing namespace currently
+// require a deactivate/reactivate (remove + add) to take effect.
+func (e *Engine) applyNrpt(profile *config.Profile, prev []string) ([]string, []NrptChange) {
+	if e.nrpt == nil {
+		return nil, nil
+	}
+	wantOrder := make([]string, 0)
+	wantServers := make(map[string][]string)
+	if profile != nil {
+		for i := range profile.NrptRules {
+			r := profile.NrptRules[i]
+			if !r.IsEnabled() {
+				continue
+			}
+			ns := nrpt.NamespaceFor(strings.TrimSpace(r.Domain))
+			if ns == "" || len(r.NameServers) == 0 {
+				continue
+			}
+			if _, exists := wantServers[ns]; !exists {
+				wantOrder = append(wantOrder, ns)
+			}
+			wantServers[ns] = r.NameServers
+		}
+	}
+	// Diff by namespace: only touch what changed. A stable profile (same rules
+	// as last apply) hits zero add/remove and skips powershell entirely — this
+	// is what fixed the slow engine startup. Caveat: editing only a rule's
+	// name-servers (same domain) isn't detected as a change, so it needs a
+	// deactivate/reactivate to take effect.
+	wantSet := make(map[string]bool, len(wantOrder))
+	for _, n := range wantOrder {
+		wantSet[n] = true
+	}
+	prevSet := make(map[string]bool, len(prev))
+	for _, n := range prev {
+		prevSet[n] = true
+	}
+
+	var addList []nrpt.Rule
+	var removeList []string
+	var changes []NrptChange
+	for _, n := range prev {
+		if !wantSet[n] {
+			removeList = append(removeList, n)
+			changes = append(changes, NrptChange{Namespace: n, Op: "remove"})
+		}
+	}
+	for _, n := range wantOrder {
+		if !prevSet[n] {
+			addList = append(addList, nrpt.Rule{Namespace: n, NameServers: wantServers[n]})
+			changes = append(changes, NrptChange{Namespace: n, Op: "add"})
+		}
+	}
+	// Sync runs the whole batch in one powershell process.
+	if len(addList) > 0 || len(removeList) > 0 {
+		if err := e.nrpt.Sync(addList, removeList); err != nil {
+			e.log.Warn("nrpt sync failed", "err", err)
+		}
+	}
+	return wantOrder, changes
 }

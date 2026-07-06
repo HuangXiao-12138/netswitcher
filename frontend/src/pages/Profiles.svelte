@@ -1,7 +1,7 @@
 <script lang="ts">
-  import { onMount } from "svelte";
-  import { api } from "../lib/ipc";
-  import type { Config, Profile, Rule, Interface } from "../../wailsjs/go/models";
+  import { onMount, onDestroy } from "svelte";
+  import { api, events, EVT } from "../lib/ipc";
+  import type { Config, Profile, Rule, Interface, StatusResponse, NrptRule } from "../../wailsjs/go/models";
 
   let config: Config | null = null;
   let interfaces: Interface[] = [];
@@ -16,11 +16,30 @@
   let systemDefaultIf = ""; // the live default-route interface name
 
   $: activeId = config?.activeProfile ?? "";
+  // Active profile is read-only in the editor — change it via "停用" first,
+  // then edit, then "设为活动". Matches the user's mental model.
+  $: isActive = !!selected && selected.id === activeId;
   // Double optional chaining: config.profiles can be null when the on-disk
   // config has no profiles section (Go marshals a nil slice as `null`).
   $: selected = config?.profiles?.find((p) => p.id === selectedId) ?? null;
 
   onMount(load);
+
+  // Refresh the interface dropdowns when the network changes. The backend
+  // pushes status:changed after every apply (startup / network_change /
+  // config_change); mirror its interface list into the rule & advanced
+  // dropdowns so enabling/disabling adapters shows up without reopening the
+  // page. offStatus is Wails EventsOn's per-callback cancel (EventsOff(name)
+  // would also remove App's listener).
+  let offStatus: (() => void) | null = null;
+  onMount(() => {
+    offStatus = events.on(EVT.statusChanged, (st: StatusResponse) => {
+      if (st?.interfaces) interfaces = st.interfaces;
+    });
+  });
+  onDestroy(() => {
+    try { offStatus?.(); } catch {}
+  });
 
   async function load() {
     try {
@@ -44,24 +63,48 @@
 
   function setEditingFrom(src: Profile | null) {
     editing = src ? JSON.parse(JSON.stringify(src)) : null;
+    if (editing) {
+      // Normalize optional fields from undefined→"" so <select bind:value>
+      // doesn't sync undefined→"" on mount and falsely mark the form dirty
+      // (the "open Advanced → 有未保存的修改" bug).
+      editing.defaultRouteInterface = editing.defaultRouteInterface ?? "";
+      if (editing.metricPolicy) {
+        editing.metricPolicy.preferredInterface = editing.metricPolicy.preferredInterface ?? "";
+      }
+    }
     fieldErrors = {};
     errorText = "";
   }
 
-  function prepareEditing() {
-    // Used by the profile-switch reactive ($: if (selectedId)). At that point
-    // `selected` has already recomputed (topological order), so it's fresh.
-    setEditingFrom(selected);
+  // Normalize optional fields for dirty comparison. The backend omits empty
+  // defaultRouteInterface / preferredInterface (undefined in JS); setEditingFrom
+  // normalizes editing to "" so <select bind:value> doesn't mutate it on mount.
+  // To compare without false positives, BOTH sides go through norm() —
+  // otherwise the "" vs undefined difference always reads as dirty.
+  function norm(p: Profile | null): Profile | null {
+    if (!p) return p;
+    const c = JSON.parse(JSON.stringify(p));
+    c.defaultRouteInterface = c.defaultRouteInterface ?? "";
+    if (c.metricPolicy) {
+      c.metricPolicy.preferredInterface = c.metricPolicy.preferredInterface ?? "";
+    }
+    return c;
   }
 
-  $: if (selectedId) prepareEditing();
+  // editing is derived directly from `selected` (which itself tracks selectedId
+  // + config). New profile / switch / delete → selected changes → editing
+  // re-derives. MUST be a direct call with `selected` inline so svelte tracks
+  // the dependency — wrapping in a function ($: prepareEditing()) fails to
+  // re-run because svelte doesn't see selected read inside the wrapper.
+  $: setEditingFrom(selected);
 
   // Dirty flag: deep-compare the working copy to the saved original. Drives
   // the "有未保存的修改" pip and disables/enables the Save button.
-  $: dirty = editing && selected ? JSON.stringify(editing) !== JSON.stringify(selected) : false;
+  $: dirty = editing && selected ? JSON.stringify(norm(editing)) !== JSON.stringify(norm(selected)) : false;
   $: enabledCount = editing ? editing.rules.filter((r) => r.enabled !== false).length : 0;
 
   function newProfile() {
+    if (config === null) return; // still loading; load() returning would clobber this
     const id = "profile-" + Math.random().toString(36).slice(2, 8);
     const p: Profile = {
       id,
@@ -70,6 +113,7 @@
       defaultRouteInterface: "",
       autoManageMetrics: true,
       metricPolicy: { preferredMetric: 10, othersMetric: 50 },
+      nrptRules: [],
     };
     config = { ...(config ?? { version: 1, activeProfile: "", profiles: [] }), profiles: [...(config?.profiles ?? []), p] };
     selectedId = id;
@@ -97,6 +141,37 @@
     if (!editing) return;
     editing.rules = editing.rules.filter((_, i) => i !== idx);
     editing = { ...editing };
+  }
+
+  // NRPT (domain-suffix → DNS) rule helpers. Mirrors rules[] helpers but for
+  // nrptRules[]: a domain suffix + comma-separated DNS servers. The backend
+  // turns domain "luculent.vip" into NRPT namespace ".luculent.vip" so it
+  // matches *.luculent.vip.
+  function addNrpt() {
+    if (!editing) return;
+    const nrpt = editing.nrptRules ?? [];
+    editing = {
+      ...editing,
+      nrptRules: [...nrpt, { id: "n" + nrpt.length + "-" + Math.random().toString(36).slice(2, 5), domain: "", nameServers: [], enabled: true }],
+    };
+  }
+  function removeNrpt(idx: number) {
+    if (!editing?.nrptRules) return;
+    editing.nrptRules = editing.nrptRules.filter((_, i) => i !== idx);
+    editing = { ...editing };
+  }
+  function nrptField(idx: number, field: "domain" | "enabled", value: any) {
+    if (!editing?.nrptRules) return;
+    const ns = [...editing.nrptRules];
+    ns[idx] = { ...ns[idx], [field]: value };
+    editing = { ...editing, nrptRules: ns };
+  }
+  function nrptServers(idx: number, value: string) {
+    if (!editing?.nrptRules) return;
+    const servers = value.split(",").map((s) => s.trim()).filter(Boolean);
+    const ns = [...editing.nrptRules];
+    ns[idx] = { ...ns[idx], nameServers: servers };
+    editing = { ...editing, nrptRules: ns };
   }
 
   function ruleField(idx: number, field: keyof Rule, value: any) {
@@ -149,18 +224,21 @@
   }
   async function confirmDelete() {
     if (!editing) return;
-    pendingDelete = false;
     deleting = true;
     errorText = "";
     try {
       await api.deleteProfile(editing.id);
+      // Backend delete finished BEFORE we close the modal + refresh the list,
+      // so the left-pane card disappears in the same frame as the modal close
+      // (no async gap where the card lingers).
       const rest = (config?.profiles ?? []).filter((p) => p.id !== editing!.id);
+      config = { ...(config as Config), profiles: rest };
       selectedId = rest.length ? rest[0].id : "";
-      await load();
     } catch (e: any) {
       parseError(e);
     } finally {
       deleting = false;
+      pendingDelete = false;
     }
   }
 
@@ -211,14 +289,16 @@
         {#if (config?.profiles ?? []).length}{(config?.profiles ?? []).length} 个配置 · 活动 {activeId ? 1 : 0}{:else}尚无配置{/if}
       </div>
     </div>
-    <button class="btn primary" on:click={newProfile}>+ 新建配置</button>
+    <button class="btn primary" on:click={newProfile} disabled={config === null}>+ 新建配置</button>
   </div>
 
   {#if errorText}
     <div class="err">{errorText}</div>
   {/if}
 
-  {#if (config?.profiles ?? []).length === 0}
+  {#if config === null}
+    <div class="empty-state"><p class="muted">加载配置中…</p></div>
+  {:else if (config.profiles ?? []).length === 0}
     <div class="empty-state">
       <h3>还没有路由配置</h3>
       <p class="muted">新建一个配置，添加"哪些网段走哪块网卡"的规则，<br />NetSwitcher 会自动维护，网络变化也会重新下发。</p>
@@ -241,7 +321,7 @@
           </div>
           <div class="prof-meta">
             <span class="rules">{p.rules?.length ?? 0} 条</span>
-            <span class="nic">{p.defaultRouteInterface || '—'}</span>
+            <span class="nic">{p.metricPolicy?.preferredInterface || p.defaultRouteInterface || '—'}</span>
           </div>
         </button>
       {/each}
@@ -250,6 +330,12 @@
     <!-- Editor -->
     <section class="editor">
       {#if editing}
+        {#if isActive}
+          <div class="readonly-banner" title="停用此配置后即可编辑">
+            ⚠ 当前为活动配置，规则只读 — 点下方“停用”后才能编辑，改完再“设为活动”。
+          </div>
+        {/if}
+        <fieldset class="editor-fs" disabled={isActive}>
         <!-- Overview card -->
         <div class="overview" class:is-active={editing.id === activeId}>
           <div class="ov-head">
@@ -266,8 +352,16 @@
             <div class="ov-stats">
               <div class="ov-stat"><span class="k">规则</span><span class="v accent">{editing.rules.length}</span></div>
               <div class="ov-stat"><span class="k">启用</span><span class="v">{enabledCount} / {editing.rules.length}</span></div>
-              <div class="ov-stat"><span class="k">默认出口</span><span class="v">{editing.defaultRouteInterface || (systemDefaultIf ? `系统默认（${systemDefaultIf}）` : '—')}</span></div>
-              <div class="ov-stat"><span class="k">Metric</span><span class="v">{editing.metricPolicy ? `${editing.metricPolicy.preferredMetric ?? '—'} / ${editing.metricPolicy.othersMetric ?? '—'}` : '—'}</span></div>
+              <div
+                class="ov-stat"
+                title={(editing.metricPolicy?.preferredInterface || editing.defaultRouteInterface)
+                  ? ""
+                  : `未配置默认路由网卡 —— 默认流量按系统当前 metric 走,本工具不会主动接管默认路由。展开下方“高级”→ 设置“首选网卡”或“默认路由网卡”后才会真正生效`}
+              >
+                <span class="k">默认出口</span>
+                <span class="v" class:warn={!editing.metricPolicy?.preferredInterface && !editing.defaultRouteInterface}>{editing.metricPolicy?.preferredInterface || editing.defaultRouteInterface || (systemDefaultIf ? `系统 ${systemDefaultIf}` : "未配置")}</span>
+              </div>
+              <div class="ov-stat"><span class="k">Metric</span><span class="v">{editing.metricPolicy?.preferredMetric ?? '—'}</span></div>
             </div>
           </div>
         </div>
@@ -275,7 +369,7 @@
         <!-- Rules -->
         <div class="rules-region">
           <div class="region-head">
-            <h2>规则 <span class="count">{editing.rules.length}</span></h2>
+            <h2>路由规则 <span class="count">{editing.rules.length}</span><span class="tip" title={`配置指南\n• 把指定网段(CIDR)固定到某块网卡,例如 168.168.0.0/16 → 以太网3\n• 网关选"自动"自动取该网卡当前网关,或手动指定 IP\n• 默认路由(其余流量)走哪块网卡在下方"高级"里设\n• 这是 IP 路由,和"域名解析规则"独立`}>?</span></h2>
             <button class="btn small" on:click={addRule}>+ 添加规则</button>
           </div>
           <div class="rules-card">
@@ -296,6 +390,9 @@
                       </td>
                       <td>
                         <select class="cell" bind:value={r.viaInterface}>
+                          {#if r.viaInterface && !interfaces.some((i) => i.Name === r.viaInterface)}
+                            <option value={r.viaInterface} disabled>{r.viaInterface}（当前不可用）</option>
+                          {/if}
                           {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name}</option>{/each}
                         </select>
                       </td>
@@ -325,11 +422,46 @@
           </div>
         </div>
 
+        <!-- NRPT (domain-suffix → DNS) rules -->
+        <div class="rules-region">
+          <div class="region-head">
+            <h2>域名解析规则 <span class="count">{(editing.nrptRules ?? []).length}</span><span class="tip" title={`配置指南\n• 填 *.demo.com → 通配,匹配所有子域 *.demo.com(不含 demo.com 本身)\n• 填 demo.com → 匹配 demo.com 及其子域 *.demo.com\n• 想精确到单个主机,填完整域名(如 a.demo.com)\n• DNS 服务器填内网 DNS 的 IP,多个用逗号分隔\n• 和 IP 路由独立;若解析出的是内网 IP 想走内网网卡,再配上方的路由规则`}>?</span></h2>
+            <button class="btn small" on:click={addNrpt}>+ 添加域名</button>
+          </div>
+          <div class="rules-card">
+            {#if !(editing.nrptRules ?? []).length}
+              <div class="rules-empty">还没有域名规则。让指定后缀的域名走指定 DNS 服务器解析(例如内网域名走内网 DNS);若解析出的是内网 IP,可再配上方的 IP 路由走内网网卡。</div>
+            {:else}
+            <div class="rules-scroll">
+              <table>
+                <thead>
+                  <tr><th class="col-dom">域名后缀</th><th class="col-dns">DNS 服务器</th><th class="col-en">启用</th><th class="col-x"></th></tr>
+                </thead>
+                <tbody>
+                  {#each editing.nrptRules as n, i}
+                    <tr>
+                      <td class="col-dom">
+                        <input class="cell mono" value={n.domain} placeholder="demo.com 或 *.demo.com" on:input={(e) => nrptField(i, "domain", e.currentTarget.value)} />
+                      </td>
+                      <td class="col-dns">
+                        <input class="cell mono" value={(n.nameServers ?? []).join(", ")} placeholder="10.0.0.1" on:input={(e) => nrptServers(i, e.currentTarget.value)} />
+                      </td>
+                      <td><span class="toggle-sw" class:off={n.enabled === false} on:click={() => nrptField(i, "enabled", !(n.enabled !== false))} role="switch" tabindex="0"></span></td>
+                      <td class="col-x"><button class="row-del" on:click={() => removeNrpt(i)} title="删除">×</button></td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+            {/if}
+          </div>
+        </div>
+
         <!-- Advanced (collapsed) -->
         <div class="advanced" class:open={advOpen}>
           <div class="adv-head" on:click={() => (advOpen = !advOpen)}>
             <div class="lbl"><span class="caret">▸</span> 高级 · 默认路由与跃点数策略</div>
-            <div class="summary">默认 {editing.defaultRouteInterface || '未设'} · metric {editing.autoManageMetrics && editing.metricPolicy ? `${editing.metricPolicy.preferredMetric ?? '-'}/${editing.metricPolicy.othersMetric ?? '-'}` : '关闭'}</div>
+            <div class="summary">默认 {editing.metricPolicy?.preferredInterface || editing.defaultRouteInterface || '未设'} · metric {editing.autoManageMetrics && editing.metricPolicy ? `${editing.metricPolicy.preferredMetric ?? '-'}` : '关闭'}</div>
           </div>
           {#if advOpen}
           <div class="adv-body">
@@ -338,6 +470,9 @@
               <div class="control">
                 <select bind:value={editing.defaultRouteInterface}>
                   <option value="">（不管理默认路由）</option>
+                  {#if editing.defaultRouteInterface && !interfaces.some((i) => i.Name === editing.defaultRouteInterface)}
+                    <option value={editing.defaultRouteInterface} disabled>{editing.defaultRouteInterface}（当前不可用）</option>
+                  {/if}
                   {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name} ({ifc.MediaType})</option>{/each}
                 </select>
               </div>
@@ -353,24 +488,26 @@
             </div>
             {#if editing.autoManageMetrics && editing.metricPolicy}
             <div class="adv-row">
-              <div class="label">首选网卡 + metric<small>preferredInterface / preferredMetric / othersMetric</small></div>
+              <div class="label">首选网卡 + metric<small>preferredInterface / preferredMetric</small></div>
               <div class="control">
                 <div style="flex:1; min-width:160px">
                   <select bind:value={editing.metricPolicy.preferredInterface}>
                     <option value="">（用默认路由网卡）</option>
+                    {#if editing.metricPolicy.preferredInterface && !interfaces.some((i) => i.Name === editing.metricPolicy.preferredInterface)}
+                      <option value={editing.metricPolicy.preferredInterface} disabled>{editing.metricPolicy.preferredInterface}（当前不可用）</option>
+                    {/if}
                     {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name}</option>{/each}
                   </select>
                 </div>
-                <span class="mini">preferred</span>
+                <span class="mini">metric</span>
                 <input class="num" type="number" min="1" bind:value={editing.metricPolicy.preferredMetric} />
-                <span class="mini">others</span>
-                <input class="num" type="number" min="1" bind:value={editing.metricPolicy.othersMetric} />
               </div>
             </div>
             {/if}
           </div>
           {/if}
         </div>
+        </fieldset>
 
         <!-- Action bar -->
         <div class="actionbar">
@@ -427,6 +564,9 @@
 
   /* Two-pane stage */
   .stage { display: grid; grid-template-columns: 240px 1fr; gap: 20px; flex: 1; min-height: 0; }
+  .editor-fs { border: none; padding: 0; margin: 0; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+  .editor-fs:disabled { opacity: 0.6; }
+  .readonly-banner { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.35); color: var(--warn); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 12px; margin-bottom: 0; line-height: 1.5; }
 
   /* Profile list */
   .prof-list { display: flex; flex-direction: column; gap: 4px; }
@@ -450,7 +590,7 @@
 
   /* Overview card */
   .overview { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 18px 22px; }
-  .overview.is-active { border-color: rgba(74,222,128,0.4); box-shadow: inset 3px 0 0 var(--good); padding-left: 24px; }
+  .overview.is-active { border-color: rgba(74,222,128,0.4); }
   .ov-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
   .ov-titleblock { min-width: 0; flex: 1; }
   .ov-status { display: inline-flex; align-items: center; gap: 6px; font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); margin-bottom: 6px; }
@@ -470,6 +610,7 @@
   .ov-stat .k { font-size: 10px; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-faint); }
   .ov-stat .v { font-family: var(--font-mono); font-size: 14px; color: var(--text); }
   .ov-stat .v.accent { color: var(--accent); }
+  .ov-stat .v.warn { color: var(--warn); }
 
   /* Rules region */
   .rules-region { display: flex; flex-direction: column; gap: 10px; }
@@ -485,6 +626,7 @@
   tbody tr:last-child td { border-bottom: none; }
   tbody tr:hover td { background: rgba(95,184,255,0.04); }
   .col-dest { width: 19%; } .col-if { width: 13%; } .col-gwm { width: 16%; } .col-gw { width: 19%; } .col-m { width: 8%; } .col-en { width: 8%; } .col-x { width: 40px; text-align: center; }
+  .col-dom { width: 38%; } .col-dns { width: 50%; }
   /* .cell / .seg / .seg-btn / .toggle-sw visual styling comes from the global
      app.css (so the theme switch applies). Here we only keep layout overrides. */
   .cell { width: 100%; box-sizing: border-box; }
@@ -492,8 +634,10 @@
   .gw-ip { width: 100%; box-sizing: border-box; }
   .metric { width: 60px; }
   .field-err { color: var(--bad); font-size: 11px; margin-top: 3px; }
-  .row-del { background: transparent; border: none; color: var(--text-faint); cursor: pointer; padding: 4px 8px; font-size: 16px; line-height: 1; border-radius: 4px; }
+  .row-del { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; vertical-align: middle; background: transparent; border: none; color: var(--text-faint); cursor: pointer; padding: 0; font-size: 15px; line-height: 1; border-radius: 4px; }
   .row-del:hover { color: var(--bad); background: rgba(248,113,113,0.08); }
+  /* Keep all inline controls in a rule row aligned to the row's midline. */
+  .rules-card td .cell { vertical-align: middle; }
 
   /* Advanced */
   .advanced { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
@@ -521,6 +665,8 @@
   .actionbar .divider { width: 1px; height: 22px; background: var(--border); margin: 0 6px; }
   .unsaved-pip { font-family: var(--font-mono); font-size: 11px; color: var(--warn); display: inline-flex; align-items: center; gap: 5px; }
   .unsaved-pip::before { content: '●'; font-size: 8px; }
+  .tip { display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; border-radius: 50%; background: var(--bg-2); border: 1px solid var(--border); color: var(--text-faint); font-size: 10px; cursor: help; margin-left: 6px; vertical-align: middle; user-select: none; }
+  .tip:hover { color: var(--text); border-color: var(--text-dim); }
 
   /* Buttons (local, since this page defines its own btn styles) */
   /* .btn visual styling comes from global app.css button rules (themed).

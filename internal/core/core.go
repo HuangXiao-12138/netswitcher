@@ -23,6 +23,7 @@ import (
 	"github.com/netswitcher/netswitcher/internal/conflict"
 	"github.com/netswitcher/netswitcher/internal/ifacemgr"
 	"github.com/netswitcher/netswitcher/internal/netwatch"
+	"github.com/netswitcher/netswitcher/internal/nrpt"
 	"github.com/netswitcher/netswitcher/internal/routeengine"
 	"github.com/netswitcher/netswitcher/internal/state"
 )
@@ -41,6 +42,8 @@ type Options struct {
 	ApplyExec routeengine.Executor
 	// MetricSetter lets tests inject a mock. Nil → real netsh.
 	MetricSetter routeengine.MetricSetter
+	// NrptSetter lets tests inject a mock. Nil → real PowerShell NRPT setter.
+	NrptSetter nrpt.Setter
 }
 
 // StatusResponse is the data the IPC GetStatus / SubscribeStatus push to GUIs.
@@ -48,6 +51,7 @@ type StatusResponse struct {
 	Interfaces    []ifacemgr.Interface    `json:"interfaces"`
 	ActiveProfile *config.Profile         `json:"activeProfile"`
 	LastResult    routeengine.ApplyResult `json:"lastResult"`
+	ManagedRoutes []state.Entry           `json:"managedRoutes"`
 	Conflicts     []conflict.Conflict     `json:"conflicts"`
 	SnapshotAt    time.Time               `json:"snapshotAt"`
 }
@@ -119,7 +123,11 @@ func New(opts Options, log *slog.Logger) (*Core, error) {
 	if ms == nil {
 		ms = &routeengine.NetshMetric{}
 	}
-	c.engine = routeengine.New(exec, ms, c.store, log)
+	ns := opts.NrptSetter
+	if ns == nil {
+		ns = &nrpt.PowerShellSetter{}
+	}
+	c.engine = routeengine.New(exec, ms, c.store, log, routeengine.WithNrpt(ns))
 
 	return c, nil
 }
@@ -150,7 +158,28 @@ func (c *Core) Start() error {
 
 	// Initial apply.
 	c.applyOnce("startup")
+	// Settlement: at startup DHCP / interfaces may not be ready, leaving rules
+	// skipped (no gateway yet). Re-apply after a delay, then periodically retry
+	// until nothing is skipped (bounded) — covers slow DHCP / gateway arrival.
+	go c.settleLoop()
 	return nil
+}
+
+// settleLoop re-applies after startup to catch rules that were skipped because
+// their interface / gateway wasn't ready yet (DHCP still negotiating, etc.).
+// Stops once a pass has zero skipped rules, or after maxRetries (5 min cap).
+// Triggered only by Start.
+func (c *Core) settleLoop() {
+	time.Sleep(3 * time.Second)
+	const maxRetries = 10 // 10 × 30s = 5min cap
+	for i := 0; i < maxRetries; i++ {
+		st := c.ApplyOnce("settle_retry")
+		if len(st.Skipped) == 0 {
+			return
+		}
+		time.Sleep(30 * time.Second)
+	}
+	c.log.Warn("settle: skipped rules remained after retries", "retries", maxRetries)
 }
 
 // Stop tears down watchers. Per spec §7.1, routes are NOT cleaned up — a
@@ -185,6 +214,14 @@ func (c *Core) applyOnce(reason string) StatusResponse {
 	profile := c.cfg.ActiveProfileOrDefault()
 	result := c.engine.Apply(profile, snap, reason)
 
+	// Re-snapshot AFTER apply: applyMetrics changes interface metrics via netsh,
+	// so the pre-apply snapshot above still holds the OLD metrics. Without this
+	// the status push (and the Status page) shows stale metric values — the
+	// "apply ran but metric didn't update" bug.
+	if postSnap, err := c.ifaceMgr.Snapshot(); err == nil {
+		snap = postSnap
+	}
+
 	wantsDefault := profile != nil && profile.AutoManage() &&
 		(profile.DefaultRouteInterface != "" ||
 			(profile.MetricPolicy != nil && profile.MetricPolicy.PreferredInterface != ""))
@@ -194,6 +231,7 @@ func (c *Core) applyOnce(reason string) StatusResponse {
 		Interfaces:    snap.Interfaces,
 		ActiveProfile: profile,
 		LastResult:    result,
+		ManagedRoutes: c.ManagedRoutes(),
 		Conflicts:     conflicts,
 		SnapshotAt:    snap.TakenAt,
 	}
@@ -322,6 +360,7 @@ func (c *Core) Status() StatusResponse {
 		st = StatusResponse{
 			Interfaces:    snap.Interfaces,
 			ActiveProfile: c.cfg.ActiveProfileOrDefault(),
+			ManagedRoutes: c.ManagedRoutes(),
 			SnapshotAt:    snap.TakenAt,
 		}
 		c.setStatus(st)

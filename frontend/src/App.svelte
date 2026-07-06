@@ -26,7 +26,6 @@
   let checking = false;
   let status: StatusResponse | null = null;
   let busy = false;
-  let elevationDismissed = false;
   let maximised = false;
 
   async function refreshState() {
@@ -68,6 +67,10 @@
     }
   }
 
+  async function quitApp() {
+    try { await api.quit(); } catch {}
+  }
+
   async function installAutoStart() {
     busy = true;
     try {
@@ -80,8 +83,10 @@
     }
   }
 
-  // First-run elevation modal: shown when not elevated and not dismissed.
-  $: showElevationModal = !elevated && !elevationDismissed;
+  // Non-elevated runs are blocked entirely — admin is required to touch routes,
+  // so there's no useful "read-only" mode. The modal can only be dismissed by
+  // relaunching elevated (or closing the window).
+  $: showElevationModal = !elevated;
   // Auto-start nudge: elevated but not configured for boot launch.
   $: showAutoStartNudge = elevated && !autoStart;
 
@@ -186,7 +191,7 @@
         <li>建议之后设置「开机自启」，下次登录免 UAC</li>
       </ul>
       <div class="modal-actions">
-        <button class="ghost" on:click={() => (elevationDismissed = true)} disabled={busy}>稍后（只读）</button>
+        <button class="ghost" on:click={quitApp} disabled={busy}>退出</button>
         <button class="primary" on:click={relaunchElevated} disabled={busy}>
           {busy ? "等待 UAC…" : "以管理员身份重启"}
         </button>

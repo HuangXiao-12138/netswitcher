@@ -20,6 +20,7 @@ export function IsElevated(): Promise<boolean>;
 export function IsMaximised(): Promise<boolean>;
 export function EngineActive(): Promise<boolean>;
 export function RelaunchElevated(): Promise<void>;
+export function Quit(): Promise<void>;
 export function AutoStartInstalled(): Promise<boolean>;
 export function InstallAutoStart(): Promise<void>;
 export function UninstallAutoStart(): Promise<void>;

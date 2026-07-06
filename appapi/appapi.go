@@ -87,6 +87,10 @@ func (a *API) OnStartup(ctx context.Context) {
 	logDir, _ := paths.LogDir()
 	_, _ = logging.Configure("info", logDir)
 	logging.SetPipeSink(a.logFan)
+	// Record how this instance was launched — the key diagnostic for the
+	// "以管理员身份重启不生效" loop: shows whether --takeover was forwarded and
+	// whether the process is elevated.
+	a.log.Info("onstartup", "elevated", a.elevated, "pid", os.Getpid(), "args", os.Args)
 
 	go func() {
 		// Second-instance signal: when another copy launches, it sets the show
@@ -158,6 +162,11 @@ func (a *API) RelaunchElevated() error {
 	if err := winutil.RelaunchElevated(""); err != nil {
 		return err
 	}
+	// Drop the single-instance lock IMMEDIATELY. We've committed to exit; the
+	// elevated instance starting via UAC must be able to acquire it without
+	// racing our shutdown. Without this the new process starts its takeover
+	// loop, then disappears when we exit — leaving no GUI.
+	winutil.ReleaseSingleton()
 	// The elevated instance is starting via UAC; let this one close so we
 	// don't end up with two windows. Arming quitting bypasses OnBeforeClose.
 	a.quitting.Store(true)
@@ -465,6 +474,13 @@ func (a *API) applyNow() {
 	if _, err := a.ApplyNow(); err != nil {
 		a.log.Warn("tray apply-now failed", "err", err)
 	}
+}
+
+// Quit is the frontend-facing exit (the elevation modal's "退出" button).
+// Same as the tray quit: arm quitting so OnBeforeClose doesn't minimize to
+// tray, then runtime.Quit.
+func (a *API) Quit() {
+	a.quitApp()
 }
 
 // quitApp is the tray "退出" handler: arm the quitting flag so OnBeforeClose

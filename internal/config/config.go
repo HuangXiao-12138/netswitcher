@@ -35,6 +35,31 @@ type Profile struct {
 	DefaultRouteInterface string        `json:"defaultRouteInterface,omitempty"`
 	AutoManageMetrics     *bool         `json:"autoManageMetrics,omitempty"` // default true
 	MetricPolicy          *MetricPolicy `json:"metricPolicy,omitempty"`
+	NrptRules             []NrptRule    `json:"nrptRules,omitempty"`
+}
+
+// NrptRule maps a domain suffix to a DNS server via the Windows Name Resolution
+// Policy Table. Add-DnsClientNrptRule makes *.{Domain} resolve via NameServers,
+// so — combined with an IP route covering the resolved range — traffic for that
+// domain exits the desired interface. e.g. Domain="luculent.vip" +
+// NameServers=["168.168.1.1"] + a route for 168.168.0.0/16 → 以太网3 makes
+// *.luculent.vip resolve to internal IPs and route over Ethernet.
+type NrptRule struct {
+	ID          string   `json:"id"`
+	Domain      string   `json:"domain"`      // e.g. "luculent.vip" → NRPT namespace ".luculent.vip"
+	NameServers []string `json:"nameServers"` // DNS server IPs, e.g. ["168.168.1.1"]
+	Enabled     *bool    `json:"enabled,omitempty"`
+}
+
+// IsEnabled returns whether an NRPT rule is enabled (default true when unset).
+func (r *NrptRule) IsEnabled() bool {
+	if r == nil {
+		return false
+	}
+	if r.Enabled != nil {
+		return *r.Enabled
+	}
+	return true
 }
 
 // Rule maps one destination CIDR to one interface.

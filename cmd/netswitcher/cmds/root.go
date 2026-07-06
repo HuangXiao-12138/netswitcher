@@ -19,6 +19,13 @@ type globalFlags struct {
 
 var gflags = &globalFlags{}
 
+// takeoverFlag is set by the hidden --takeover flag. The elevated-relaunch
+// path (RelaunchElevated) uses it so the new elevated instance waits for the
+// previous instance to release the single-instance mutex, instead of mistaking
+// itself for a second instance and exiting — which previously left no instance
+// running at all (relaunch "did nothing").
+var takeoverFlag bool
+
 // NewRoot builds the root command with all subcommands attached.
 func NewRoot(version string) *cobra.Command {
 	root := &cobra.Command{
@@ -38,9 +45,11 @@ func NewRoot(version string) *cobra.Command {
 		// a window without learning subcommands. `--help` and subcommands are
 		// still handled by cobra before this RunE fires.
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGUI(version)
+			return runGUI(version, takeoverFlag)
 		},
 	}
+	root.Flags().BoolVar(&takeoverFlag, "takeover", false, "内部:提权重启接管模式(等旧实例退出而非自我退出)")
+	_ = root.Flags().MarkHidden("takeover")
 	root.PersistentFlags().StringVar(&gflags.configPath, "config", "",
 		"config.json 路径（默认 %ProgramData%\\NetSwitcher\\config.json）")
 	root.PersistentFlags().StringVar(&gflags.statePath, "state", "",

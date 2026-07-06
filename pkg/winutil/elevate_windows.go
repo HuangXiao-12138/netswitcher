@@ -25,18 +25,25 @@ func IsElevated() bool {
 // the "runas" verb. `service ensure` installs (if absent) AND starts the
 // service, so this is a true one-click setup from the GUI banner.
 func StartServiceElevated(exePath string) error {
-	return relaunchRunas(exePath, "service ensure")
+	return relaunchRunas(exePath, "service ensure", windows.SW_HIDE)
 }
 
-// RelaunchElevated launches `<exe>` (bare — GUI mode) with a UAC prompt. Used
-// when the GUI was launched non-elevated and needs admin to modify routes.
+// RelaunchElevated launches `<exe> --takeover` (GUI mode) with a UAC prompt.
+// Used when the GUI was launched non-elevated and needs admin to modify routes.
+// The --takeover flag makes the new instance wait for this one to release the
+// single-instance mutex instead of mistaking itself for a second instance and
+// exiting — without it, both instances end up dead (relaunch does nothing).
 func RelaunchElevated(exePath string) error {
-	return relaunchRunas(exePath, "")
+	// SW_SHOWNORMAL (not SW_HIDE): the new instance is a GUI window the user
+	// expects to see. With SW_HIDE the elevated restarts invisibly and looks
+	// like "重启没生效" — the process is actually running (engine online) but
+	// its window never appears.
+	return relaunchRunas(exePath, "--takeover", windows.SW_SHOWNORMAL)
 }
 
 // RunElevated runs an arbitrary exe with args under a UAC prompt (runas verb).
 func RunElevated(exePath, args string) error {
-	return relaunchRunas(exePath, args)
+	return relaunchRunas(exePath, args, windows.SW_HIDE)
 }
 
 // ShellOpen opens a file or folder with its default handler via the shell
@@ -50,7 +57,7 @@ func ShellOpen(path string) error {
 	return windows.ShellExecute(0, verb, file, nil, nil, windows.SW_SHOWNORMAL)
 }
 
-func relaunchRunas(exePath, args string) error {
+func relaunchRunas(exePath, args string, showCmd int32) error {
 	if exePath == "" {
 		exe, err := os.Executable()
 		if err != nil {
@@ -64,7 +71,7 @@ func relaunchRunas(exePath, args string) error {
 	if args != "" {
 		argsPtr, _ = windows.UTF16PtrFromString(args)
 	}
-	if err := windows.ShellExecute(0, verb, file, argsPtr, nil, windows.SW_HIDE); err != nil {
+	if err := windows.ShellExecute(0, verb, file, argsPtr, nil, showCmd); err != nil {
 		return fmt.Errorf("runas: %w (用户可能取消了提权)", err)
 	}
 	return nil

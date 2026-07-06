@@ -115,7 +115,7 @@
   .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 2px 6px; font-size: 12px; }
   .log-row:hover { background: var(--bg-1); }
   .log-time { color: var(--text-faint); font-family: var(--font-mono); width: 70px; flex-shrink: 0; }
-  .log-msg { flex: 1; word-break: break-word; }
-  .log-attrs { color: var(--text-faint); word-break: break-all; }
+  .log-msg { flex: 1 1 auto; min-width: 0; word-break: break-word; }
+  .log-attrs { flex: 0 1 auto; min-width: 0; max-width: 45%; color: var(--text-faint); word-break: break-all; }
   .accent { color: var(--accent); }
 </style>

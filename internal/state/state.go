@@ -27,9 +27,10 @@ type Entry struct {
 
 // Snapshot is the timestamped last-applied set.
 type Snapshot struct {
-	Entries []Entry   `json:"entries"`
-	At      time.Time `json:"at"`
-	Reason  string    `json:"reason,omitempty"`
+	Entries        []Entry   `json:"entries"`
+	NrptNamespaces []string  `json:"nrptNamespaces,omitempty"` // domain-suffix NRPT rules currently applied
+	At             time.Time `json:"at"`
+	Reason         string    `json:"reason,omitempty"`
 }
 
 // Store reads and writes state.json atomically.

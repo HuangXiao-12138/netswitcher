@@ -27,6 +27,10 @@ export function RelaunchElevated() {
   return window.go.appapi.API.RelaunchElevated();
 }
 
+export function Quit() {
+  return window.go.appapi.API.Quit();
+}
+
 export function AutoStartInstalled() {
   return window.go.appapi.API.AutoStartInstalled();
 }

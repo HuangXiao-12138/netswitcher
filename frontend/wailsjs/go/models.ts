@@ -29,6 +29,13 @@ export interface Rule {
   enabled?: boolean;
 }
 
+export interface NrptRule {
+  id: string;
+  domain: string;
+  nameServers: string[];
+  enabled?: boolean;
+}
+
 export interface Profile {
   id: string;
   name: string;
@@ -36,6 +43,7 @@ export interface Profile {
   defaultRouteInterface?: string;
   autoManageMetrics?: boolean;
   metricPolicy?: MetricPolicy;
+  nrptRules?: NrptRule[];
 }
 
 export interface Config {
@@ -56,6 +64,7 @@ export interface Interface {
   IPv4: string[];
   Gateways: string[];
   IsUp: boolean;
+  Metric: number;
   MediaType: string;
   IfType: number;
 }
@@ -91,12 +100,18 @@ export interface MetricChange {
   newMetric: number;
 }
 
+export interface NrptChange {
+  namespace: string;
+  op: string;
+}
+
 export interface ApplyResult {
   applied: Entry[] | null;
   removed: Entry[] | null;
   skipped: SkippedRule[] | null;
   errors: RuleError[] | null;
   metrics: MetricChange[] | null;
+  nrpt: NrptChange[] | null;
   at: string;
   reason: string;
 }
@@ -116,6 +131,7 @@ export interface StatusResponse {
   interfaces: Interface[];
   activeProfile: Profile | null;
   lastResult: ApplyResult;
+  managedRoutes: Entry[];
   conflicts: Conflict[] | null;
   snapshotAt: string;
 }

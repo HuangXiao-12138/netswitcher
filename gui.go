@@ -19,4 +19,5 @@ type Options struct {
 	Height   int
 	Version  string // build version, surfaced on the Settings page
 	Bindings []any  // objects whose exported methods are exposed to the frontend
+	Takeover bool   // elevated-relaunch replacement: isolate WebView2 data dir
 }

@@ -57,6 +57,7 @@ func (m *Manager) Snapshot() (Snapshot, error) {
 			MediaType:    MediaTypeFromIfType(a.IfType),
 			IsUp:         a.OperStatus == windows.IfOperStatusUp,
 			MAC:          formatMAC(a.PhysicalAddress[:a.PhysicalAddressLength]),
+			Metric:       int(a.Ipv4Metric),
 		}
 
 		for ua := a.FirstUnicastAddress; ua != nil; ua = ua.Next {

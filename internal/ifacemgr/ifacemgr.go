@@ -29,6 +29,7 @@ type Interface struct {
 	IPv4         []string // "172.16.5.10/24"
 	Gateways     []string // current IPv4 default gateways, e.g. ["172.16.5.1"]
 	IsUp         bool
+	Metric       int    // interface metric (lower wins the default route on 0.0.0.0/0)
 	MediaType    string // "Ethernet" | "WiFi" | "Loopback" | "VPN" | ...
 	IfType       uint32 // raw IF_TYPE_*
 }

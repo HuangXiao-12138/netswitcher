@@ -1,11 +1,16 @@
 <script lang="ts">
-  import type { StatusResponse, Interface, ApplyResult, Conflict } from "../../wailsjs/go/models";
+  import type { StatusResponse, Interface, ApplyResult, Conflict, Entry } from "../../wailsjs/go/models";
 
   export let status: StatusResponse | null = null;
+  export let serviceUp = false;
 
 
   $: last = status?.lastResult as ApplyResult | undefined;
-  $: applied = last?.applied ?? [];
+  // Managed routes = the full set NetSwitcher currently has in state.json
+  // (everything it managed and is maintaining). Distinct from last.managed,
+  // which is only the routes ADDED in the most recent apply pass (often empty
+  // when nothing changed — which used to make "已下发路由" show 0).
+  $: managed = (status?.managedRoutes ?? []) as Entry[];
   // Conflicts the user has dismissed this session (by type:interface sig).
   // Reset implicitly when the process restarts. Reappears if the underlying
   // conflict set changes (different signature).
@@ -65,6 +70,15 @@
   </div>
 </div>
 
+{#if !serviceUp}
+  <div class="engine-down">
+    <strong>⚠ 路由引擎未运行</strong>
+    <div class="muted">需要管理员权限才能下发路由。请以管理员身份运行 NetSwitcher;引擎上线后这里会显示接口、已下发路由和冲突。</div>
+  </div>
+{:else if !status}
+  <div class="muted" style="padding:28px;text-align:center">正在读取状态…</div>
+{/if}
+
 {#if conflicts.length > 0}
   <div class="conflicts">
     <div class="conflicts-head">
@@ -106,6 +120,8 @@
             <dd class="mono">{ifc.Gateways?.length ? ifc.Gateways.join(", ") : "—"}</dd>
             <dt>类型 / Index</dt>
             <dd><span class="tag">{ifc.MediaType}</span> <span class="faint mono">#{ifc.Index}</span></dd>
+            <dt>Metric</dt>
+            <dd class="mono">{ifc.Metric ?? "—"}</dd>
           </dl>
         </div>
       {/each}
@@ -114,8 +130,8 @@
 </section>
 
 <section>
-  <h3>已下发路由 ({applied.length})</h3>
-  {#if !applied.length}
+  <h3>已下发路由 ({managed.length})</h3>
+  {#if !managed.length}
     <p class="muted">本工具当前未下发任何路由。</p>
   {:else}
     <div class="card" style="padding:0">
@@ -124,7 +140,7 @@
           <tr><th>目标</th><th>下一跳</th><th>接口</th><th>Index</th><th>Metric</th></tr>
         </thead>
         <tbody>
-          {#each applied as r}
+          {#each managed as r}
             <tr>
               <td class="mono">{r.destination}</td>
               <td class="mono">{r.gateway}</td>
@@ -162,6 +178,8 @@
 
 <style>
   .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+  .engine-down { background: rgba(250,204,21,0.08); border: 1px solid rgba(250,204,21,0.35); padding: 14px 16px; border-radius: var(--radius); margin-bottom: 14px; }
+  .engine-down strong { display: block; color: var(--warn); margin-bottom: 4px; font-size: 14px; }
   h2 { margin: 0; font-size: 18px; }
   h3 { margin: 18px 0 10px; font-size: 14px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
   .conflicts { background: rgba(192,132,252,0.06); border: 1px solid rgba(192,132,252,0.25); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 8px; }

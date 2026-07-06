@@ -15,12 +15,19 @@ type NetshMetric struct {
 	DryRun bool
 }
 
-// SetInterfaceMetric runs `netsh interface ipv4 set interface name=.. metric=N`.
+// SetInterfaceMetric runs `netsh interface ipv4 set interface interface=.. metric=N`.
+//
+// The parameter name MUST be `interface=`, NOT `name=`. netsh's set interface
+// command only accepts [interface=]<string>; passing name= makes netsh print
+// its usage and exit 0 — so the caller sees success while the metric is never
+// changed. This was the root cause of "默认路由没走 WLAN": metrics appeared to
+// apply (metrics=N in the log, no error) but WLAN's InterfaceMetric stayed at
+// the system default (~45) and lost the default route to Ethernet.
 func (m *NetshMetric) SetInterfaceMetric(ifaceName string, metric int) error {
 	if strings.TrimSpace(ifaceName) == "" {
 		return fmt.Errorf("set metric: empty interface name")
 	}
-	args := []string{"interface", "ipv4", "set", "interface", fmt.Sprintf("name=%s", ifaceName), fmt.Sprintf("metric=%d", metric)}
+	args := []string{"interface", "ipv4", "set", "interface", fmt.Sprintf("interface=%s", ifaceName), fmt.Sprintf("metric=%d", metric)}
 	if m.DryRun {
 		slog.Info("dry-run netsh set metric", "args", args)
 		return nil
@@ -41,7 +48,7 @@ func (m *NetshMetric) SetAutomaticMetric(ifaceName string) error {
 	if strings.TrimSpace(ifaceName) == "" {
 		return fmt.Errorf("set automatic: empty interface name")
 	}
-	args := []string{"interface", "ipv4", "set", "interface", fmt.Sprintf("name=%s", ifaceName), "metric=automatic"}
+	args := []string{"interface", "ipv4", "set", "interface", fmt.Sprintf("interface=%s", ifaceName), "metric=automatic"}
 	if m.DryRun {
 		slog.Info("dry-run netsh metric=automatic", "args", args)
 		return nil

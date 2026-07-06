@@ -96,6 +96,29 @@ func SignalSingletonShow() error {
 	return windows.SetEvent(ev)
 }
 
+// ReleaseSingleton drops the single-instance lock (closes the mutex + event
+// handles) so an incoming elevated instance can acquire it without waiting
+// for this process to fully exit. Used by RelaunchElevated: we've already
+// committed to quit, so holding the lock until OS cleanup previously made the
+// new instance's takeover loop race our shutdown and silently lose (the new
+// process would start, begin takeover, then vanish once we exited).
+func ReleaseSingleton() {
+	singletonMu.Lock()
+	defer singletonMu.Unlock()
+	if !singletonState.got {
+		return
+	}
+	if singletonState.event != 0 {
+		_ = windows.CloseHandle(singletonState.event)
+		singletonState.event = 0
+	}
+	if singletonState.mutex != 0 {
+		_ = windows.CloseHandle(singletonState.mutex)
+		singletonState.mutex = 0
+	}
+	singletonState.got = false
+}
+
 // WaitSingletonShow returns a channel that fires each time a second instance
 // signals "show yourself". The channel never closes; read it in a loop. The
 // caller must be the owner (AcquireSingleton returned owned=true).
