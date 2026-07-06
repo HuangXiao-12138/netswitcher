@@ -6,7 +6,7 @@ VERSION ?= 0.1.0
 # -H windowsgui: GUI subsystem (no console window on double-click). CLI
 # subcommands re-attach to the parent console via winutil.AttachParentConsole.
 LDFLAGS := -X main.version=$(VERSION) -H windowsgui
-BINARY  := build/bin/netswitcher.exe
+BINARY  := build/bin/NetSwitcher.exe
 
 .PHONY: all build frontend build-cli test clean fmt help
 
@@ -17,11 +17,13 @@ all: build
 ##   shows "Wails applications will not build without the correct build tags".
 build: frontend
 	@mkdir -p build/bin
+	@rm -f build/bin/netswitcher.exe build/bin/NetSwitcher.exe
 	CGO_ENABLED=1 go build -tags "desktop,production" -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/netswitcher
 
 ## build-cli: compile without CGO (no GUI; service/CLI only, no gcc needed).
 build-cli:
 	@mkdir -p build/bin
+	@rm -f build/bin/netswitcher.exe build/bin/NetSwitcher.exe
 	CGO_ENABLED=0 go build -ldflags "$(LDFLAGS)" -o $(BINARY) ./cmd/netswitcher
 
 ## frontend: install npm deps and build the Svelte front-end into dist/.

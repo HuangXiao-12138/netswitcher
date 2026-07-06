@@ -8,8 +8,11 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Binary = "build/bin/netswitcher.exe"
+$Binary = "build/bin/NetSwitcher.exe"
 New-Item -ItemType Directory -Force -Path "build/bin" | Out-Null
+# Clear any old-casing binary first: Windows is case-insensitive, so a leftover
+# netswitcher.exe would otherwise make go build keep the old name.
+Remove-Item "build/bin/netswitcher.exe", "build/bin/NetSwitcher.exe" -ErrorAction SilentlyContinue
 
 function Invoke([string]$Cmd) {
   Write-Host "» $Cmd"

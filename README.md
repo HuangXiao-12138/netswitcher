@@ -12,7 +12,7 @@
 ## 架构（当前）
 
 ```
-netswitcher.exe（提权运行，单进程）
+NetSwitcher.exe（提权运行，单进程）
 ├── Wails GUI（无边框自绘顶栏 + 系统托盘 + 单实例锁）
 ├── core 路由引擎（直接在进程内，调 route.exe / netsh）
 ├── netwatch（2s 轮询，网络变化自动 1500ms 去抖重下发）
@@ -29,7 +29,7 @@ netswitcher.exe（提权运行，单进程）
 依赖：**Go 1.22+**、**Node.js 18+**、**MinGW-w64 (gcc)**（CGO，链接 WebView2）。
 
 ```bash
-make build          # npm build + CGO go build → netswitcher.exe（~18MB，含 GUI）
+make build          # npm build + CGO go build → NetSwitcher.exe（~18MB，含 GUI）
 make build-cli      # 仅服务/CLI（CGO_ENABLED=0，无需 gcc，无 GUI）
 make test           # 单测（含 -race）
 make icon           # 从 build/windows/icon.ico 重新生成 resource.syso（换图标后跑）
@@ -47,7 +47,7 @@ Windows PowerShell：`.\build.ps1`（完整）或 `.\build.ps1 -CliOnly`。
 
 ### 双击启动（推荐）
 
-1. 双击 `netswitcher.exe` → 打开 GUI。
+1. 双击 `NetSwitcher.exe` → 打开 GUI。
 2. 首次：检测到未提权 → 弹"以管理员身份重启"→ 点同意 → UAC → 提权重启 → 全功能可用。
 3. 进"设置"页 → 开"开机自启"→ 之后登录自动以管理员启动，免 UAC。
 4. 在"配置"页加规则（目标 CIDR + 接口 + 网关）→ 保存 → 设为活动。
@@ -56,13 +56,13 @@ Windows PowerShell：`.\build.ps1`（完整）或 `.\build.ps1 -CliOnly`。
 ### 命令行（调试/高级）
 
 ```
-netswitcher.exe                       # 打开 GUI（双击等同）
-netswitcher.exe gui                   # 同上
-netswitcher.exe apply [--dry-run]     # 读 config 应用一次后退出
-netswitcher.exe dump                  # 打印接口/配置（调试）
-netswitcher.exe ipc call <method> [json]   # 命名管道自测（隐藏，遗留）
-netswitcher.exe service install|uninstall  # 遗留：旧的服务模式（kardianos），GUI 不再使用
-netswitcher.exe --help
+NetSwitcher.exe                       # 打开 GUI（双击等同）
+NetSwitcher.exe gui                   # 同上
+NetSwitcher.exe apply [--dry-run]     # 读 config 应用一次后退出
+NetSwitcher.exe dump                  # 打印接口/配置（调试）
+NetSwitcher.exe ipc call <method> [json]   # 命名管道自测（隐藏，遗留）
+NetSwitcher.exe service install|uninstall  # 遗留：旧的服务模式（kardianos），GUI 不再使用
+NetSwitcher.exe --help
 ```
 
 > 从 cmd / PowerShell 跑 CLI 命令时输出正常显示；从 Git Bash（mintty）跑看不到输出（AttachConsole 接不上伪终端）。
