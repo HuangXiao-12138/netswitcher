@@ -203,9 +203,9 @@
 <style>
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    /* Right padding is 0 so the window buttons sit flush at the edge (Windows
-       convention); buttons keep their own hit area via fixed width. */
-    padding: 8px 0 8px 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
+    /* Fixed height so the window buttons (height:100%) fill the whole bar on
+       hover; no top/bottom padding — buttons cover it instead. */
+    height: 44px; padding: 0 0 0 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
     /* Wails frameless drag uses the --wails-draggable CSS property (NOT
        -webkit-app-region). Any descendant that should be clickable must
        override it to a non-"drag" value. */
@@ -239,7 +239,7 @@
      so the buttons are clickable, not drag-handles. */
   .win-ctrl { display: flex; align-items: stretch; --wails-draggable: no-drag; }
   .win-btn {
-    width: 40px; height: 32px; padding: 0; background: transparent;
+    width: 46px; height: 44px; padding: 0; background: transparent;
     border: none; border-radius: 0; color: var(--text-dim);
     display: flex; align-items: center; justify-content: center;
     --wails-draggable: no-drag;

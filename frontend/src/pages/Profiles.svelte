@@ -517,7 +517,7 @@
             </div>
             {#if editing.autoManageMetrics && editing.metricPolicy}
             <div class="adv-row">
-              <div class="label">首选网卡 + metric<small>preferredInterface / preferredMetric</small></div>
+              <div class="label">首选网卡<small>preferredInterface</small></div>
               <div class="control">
                 <div style="flex:1; min-width:160px">
                   <select bind:value={editing.metricPolicy.preferredInterface}>
@@ -528,8 +528,13 @@
                     {#each interfaces as ifc}<option value={ifc.Name}>{ifc.Name}</option>{/each}
                   </select>
                 </div>
-                <span class="mini">metric</span>
+              </div>
+            </div>
+            <div class="adv-row">
+              <div class="label">首选 metric<small>preferredMetric</small></div>
+              <div class="control">
                 <input class="num" type="number" min="1" bind:value={editing.metricPolicy.preferredMetric} />
+                <span class="mini">值越小越优先（默认 10）</span>
               </div>
             </div>
             {/if}
