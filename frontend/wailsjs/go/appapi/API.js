@@ -118,3 +118,19 @@ export function SetLogLevel(level) {
 export function OpenLogFolder() {
   return window.go.appapi.API.OpenLogFolder();
 }
+
+export function CheckUpdate() {
+  return window.go.appapi.API.CheckUpdate();
+}
+
+export function OpenURL(url) {
+  return window.go.appapi.API.OpenURL(url);
+}
+
+export function PerformUpdate() {
+  return window.go.appapi.API.PerformUpdate();
+}
+
+export function CancelUpdate() {
+  return window.go.appapi.API.CancelUpdate();
+}

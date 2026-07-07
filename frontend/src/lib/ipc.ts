@@ -28,6 +28,10 @@ import {
   GetLogLevel,
   SetLogLevel,
   OpenLogFolder,
+  CheckUpdate,
+  OpenURL,
+  PerformUpdate,
+  CancelUpdate,
 } from "../../wailsjs/go/appapi/API";
 import {
   EventsOn,
@@ -65,6 +69,10 @@ export const api = {
   getLogLevel: () => GetLogLevel(),
   setLogLevel: (level: string) => SetLogLevel(level),
   openLogFolder: () => OpenLogFolder(),
+  checkUpdate: () => CheckUpdate(),
+  openURL: (url: string) => OpenURL(url),
+  performUpdate: () => PerformUpdate(),
+  cancelUpdate: () => CancelUpdate(),
 };
 
 export const events = {
@@ -103,4 +111,6 @@ export const EVT = {
   logLine: "log:line",
   logEnd: "log:end",
   statusChanged: "status:changed",
+  trayCheckUpdate: "tray:check-update",
+  updateProgress: "update:progress",
 } as const;

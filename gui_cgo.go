@@ -43,6 +43,7 @@ func Run(opts Options) error {
 	api := appapi.New()
 	api.IconBytes = trayIcon // tray icon for "minimize to tray" behavior
 	api.Version = opts.Version
+	api.Minimized = opts.Minimized
 	bindings := append([]any{api}, opts.Bindings...)
 
 	// Configure file logging BEFORE Wails starts so startup-time messages

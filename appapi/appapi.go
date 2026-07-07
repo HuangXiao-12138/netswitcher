@@ -33,6 +33,7 @@ import (
 	"github.com/netswitcher/netswitcher/internal/routeengine"
 	"github.com/netswitcher/netswitcher/internal/routeread"
 	"github.com/netswitcher/netswitcher/internal/tray"
+	"github.com/netswitcher/netswitcher/internal/updater"
 	"github.com/netswitcher/netswitcher/pkg/winutil"
 )
 
@@ -59,10 +60,13 @@ type API struct {
 	logFan    *logFanout
 	IconBytes []byte      // tray icon (.ico); set by the GUI layer before OnStartup
 	Version   string      // build version; set by the GUI layer
+	Minimized bool        // auto-start: start hidden in the tray (no window flash on login)
 	quitting  atomic.Bool // true once a real quit is in progress (tray → 退出 / RelaunchElevated)
 
 	mu     sync.Mutex
 	cancel context.CancelFunc // cancels any active diag stream
+
+	updateCancel context.CancelFunc // cancels an in-flight PerformUpdate (nil if none)
 }
 
 // IsQuitting reports whether the app is in the middle of a real shutdown.
@@ -83,6 +87,11 @@ func New() *API {
 // OnStartup is called by Wails with the runtime context.
 func (a *API) OnStartup(ctx context.Context) {
 	a.ctx = ctx
+	// Auto-start (--minimized): stay hidden in the tray instead of flashing
+	// the window on login. Double-click still shows the window.
+	if a.Minimized {
+		runtime.WindowHide(ctx)
+	}
 	// File + stdout logging always (so logs work even when non-elevated).
 	logDir, _ := paths.LogDir()
 	_, _ = logging.Configure("info", logDir)
@@ -103,7 +112,7 @@ func (a *API) OnStartup(ctx context.Context) {
 		}
 	}()
 	if len(a.IconBytes) > 0 {
-		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.quitApp)
+		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.checkUpdateFromTray, a.quitApp)
 	}
 	if a.elevated {
 		a.startEngine()
@@ -476,6 +485,14 @@ func (a *API) applyNow() {
 	}
 }
 
+// checkUpdateFromTray is the tray "检查更新" handler: bring the window to the
+// front and tell the frontend to switch to Settings and run the check. The
+// actual GitHub probe happens via CheckUpdate() so the result renders inline.
+func (a *API) checkUpdateFromTray() {
+	a.showWindow()
+	a.emit("tray:check-update", nil)
+}
+
 // Quit is the frontend-facing exit (the elevation modal's "退出" button).
 // Same as the tray quit: arm quitting so OnBeforeClose doesn't minimize to
 // tray, then runtime.Quit.
@@ -521,6 +538,219 @@ func (a *API) GetAppInfo() AppInfo {
 	}
 }
 
+// ---------- Update check ----------
+
+// UpdateInfo is the result of a check-for-updates probe against GitHub
+// Releases. Surfaced on the Settings page's "关于" section.
+type UpdateInfo struct {
+	CurrentVersion string `json:"currentVersion"` // build version (main.version)
+	LatestVersion  string `json:"latestVersion"`  // latest release tag, e.g. "v1.2.0"
+	HasUpdate      bool   `json:"hasUpdate"`      // true only for release builds behind latest
+	IsDevBuild     bool   `json:"isDevBuild"`     // true when current isn't a clean vX.Y.Z
+	ReleaseURL     string `json:"releaseURL"`     // HTML page for the release
+	ReleaseNotes   string `json:"releaseNotes"`   // release body (markdown)
+	PublishedAt    string `json:"publishedAt"`    // RFC3339, empty if unknown
+	ZipURL         string `json:"zipURL"`         // portable-zip asset URL (for the future one-click upgrade)
+	// Error is empty on success; on failure a user-facing message. ErrorKind
+	// categorizes the cause. Empty ErrorKind == success.
+	Error     string `json:"error"`
+	ErrorKind string `json:"errorKind"` // "" | "network" | "notfound" | "http" | "parse" | "unknown"
+}
+
+// CheckUpdate queries GitHub for the latest release and compares it to the
+// running build. Dev builds (anything that isn't a clean vX.Y.Z tag — e.g.
+// "v0.1.0-3-gabcdef", "v0.1.0-dirty", "dev", a bare hash) report
+// IsDevBuild=true and skip the comparison, so the frontend shows "开发版本"
+// instead of nagging on every Settings open. Network-bound; bounded to 15s.
+//
+// Never returns a Go error: on failure the cause is categorized (see
+// updater.ErrorKind) and surfaced inside UpdateInfo, so the frontend shows a
+// localized message in the 关于 card rather than a raw English error string.
+func (a *API) CheckUpdate() (UpdateInfo, error) {
+	info := UpdateInfo{
+		CurrentVersion: a.Version,
+		IsDevBuild:     !updater.IsReleaseBuild(a.Version),
+	}
+
+	ctx := a.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+
+	rel, err := updater.FetchLatest(ctx, updater.RepoAPI)
+	if err != nil {
+		kind := kindOf(err)
+		info.ErrorKind = string(kind)
+		info.Error = friendlyUpdateMessage(kind)
+		a.log.Warn("check update failed", "kind", kind, "err", err)
+		return info, nil
+	}
+
+	info.LatestVersion = rel.TagName
+	info.ReleaseURL = rel.HTMLURL
+	info.ReleaseNotes = rel.Body
+	info.ZipURL = rel.ZipURL
+	if !rel.PublishedAt.IsZero() {
+		info.PublishedAt = rel.PublishedAt.Format(time.RFC3339)
+	}
+	// Only compare for release builds; dev builds always read HasUpdate=false so
+	// developers running local builds aren't told their build is "behind".
+	if !info.IsDevBuild {
+		info.HasUpdate = updater.HasNewer(a.Version, rel.TagName)
+	}
+	return info, nil
+}
+
+// friendlyUpdateMessage maps an updater error kind to a user-facing string.
+// Kept in the backend so the localized message is consistent and the raw
+// English error never reaches the UI.
+func friendlyUpdateMessage(kind updater.ErrorKind) string {
+	switch kind {
+	case updater.ErrNetwork:
+		return "无法连接 GitHub，请检查网络后重试。"
+	case updater.ErrNotFound:
+		return "尚未发布任何版本（或仓库地址有误）。"
+	case updater.ErrParse:
+		return "版本信息解析失败，请稍后重试。"
+	case updater.ErrHTTP:
+		return "GitHub 服务异常，请稍后重试。"
+	default:
+		return "检查更新失败，请稍后重试。"
+	}
+}
+
+// kindOf extracts the ErrorKind from a FetchError, defaulting to ErrUnknown
+// for anything else.
+func kindOf(err error) updater.ErrorKind {
+	if fe, ok := err.(*updater.FetchError); ok {
+		return fe.Kind
+	}
+	return updater.ErrUnknown
+}
+
+// PerformUpdate kicks off a background upgrade: download the latest release,
+// extract the new exe, and arm a detached helper batch to swap it in once this
+// process exits. Requires elevation.
+//
+// It returns immediately — the actual work runs in a goroutine (see
+// performUpdateAsync) because Wails buffers events emitted during a bound
+// method's synchronous run until that method returns. Progress + completion
+// are streamed via the "update:progress" event (stages: preparing →
+// downloading [with bytes] → installing → armed | failed). The frontend
+// listens for "armed" to know it should Quit() so the swap can complete.
+func (a *API) PerformUpdate() error {
+	if !a.elevated {
+		return fmt.Errorf("需要管理员权限才能自动升级，请以管理员身份重启后再试")
+	}
+	if a.ctx == nil {
+		return fmt.Errorf("尚未就绪，请稍后重试")
+	}
+	go a.performUpdateAsync()
+	return nil
+}
+
+// CancelUpdate aborts an in-flight upgrade (download phase). No-op if none is
+// running or the helper batch is already armed — once armed, the process must
+// quit for the swap to complete, so there's no calling it off.
+func (a *API) CancelUpdate() {
+	a.mu.Lock()
+	if a.updateCancel != nil {
+		a.updateCancel()
+	}
+	a.mu.Unlock()
+}
+
+// performUpdateAsync does the real work on a background goroutine so emitted
+// progress events reach the frontend live (not buffered behind a bound call).
+// Terminal events: "armed" (success, frontend should Quit) or "failed" (with
+// an "error" field).
+func (a *API) performUpdateAsync() {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	a.mu.Lock()
+	a.updateCancel = cancel
+	a.mu.Unlock()
+	defer func() {
+		cancel()
+		a.mu.Lock()
+		a.updateCancel = nil
+		a.mu.Unlock()
+	}()
+
+	emit := func(stage string, extra map[string]any) {
+		if a.ctx == nil {
+			return
+		}
+		payload := map[string]any{"stage": stage}
+		for k, v := range extra {
+			payload[k] = v
+		}
+		runtime.EventsEmit(a.ctx, "update:progress", payload)
+	}
+	fail := func(msg string) {
+		a.log.Warn("update failed", "msg", msg)
+		emit("failed", map[string]any{"error": msg})
+	}
+
+	emit("preparing", nil)
+	rel, err := updater.FetchLatest(ctx, updater.RepoAPI)
+	if err != nil {
+		if ctx.Err() != nil {
+			return // cancelled
+		}
+		fail(friendlyUpdateMessage(kindOf(err)))
+		return
+	}
+	if rel.ZipURL == "" {
+		fail("该版本未提供可下载的升级包")
+		return
+	}
+	// Guard against direct IPC calls that bypass the UI's hasUpdate gate: only
+	// upgrade a release build that's actually behind latest.
+	if !updater.IsReleaseBuild(a.Version) {
+		fail("开发版本无法自动升级，请前往发布页手动下载")
+		return
+	}
+	if !updater.HasNewer(a.Version, rel.TagName) {
+		fail("当前已是最新版本，无需升级")
+		return
+	}
+
+	emit("downloading", nil)
+	tmpDir, err := os.MkdirTemp("", "ns-update-*")
+	if err != nil {
+		fail("创建临时目录失败")
+		return
+	}
+	newExe, err := updater.DownloadAndExtract(ctx, rel.ZipURL, tmpDir, func(downloaded, total int64) {
+		emit("downloading", map[string]any{
+			"downloaded": downloaded,
+			"total":      total,
+		})
+	})
+	if err != nil {
+		if ctx.Err() != nil {
+			return // cancelled
+		}
+		fail("下载升级包失败，请检查网络后重试")
+		return
+	}
+	// Sanity-check: a sub-MB exe means the download is broken or malicious.
+	if info, e := os.Stat(newExe); e != nil || info.Size() < 1<<20 {
+		fail("下载的升级包异常，请稍后重试")
+		return
+	}
+
+	emit("installing", nil)
+	if err := updater.ReplaceAndRestart(newExe); err != nil {
+		fail("启动升级失败：" + err.Error())
+		return
+	}
+	a.log.Info("update armed; quitting to let helper complete the swap", "new", newExe)
+	emit("armed", nil)
+}
+
 // GetLogLevel returns the active log level (debug/info/warn/error).
 func (a *API) GetLogLevel() string {
 	return logging.ActiveLevel()
@@ -545,6 +775,12 @@ func (a *API) OpenLogFolder() error {
 		return err
 	}
 	return winutil.ShellOpen(logDir)
+}
+
+// OpenURL opens a URL in the system's default browser. Used by the update
+// check to send the user to the GitHub release page.
+func (a *API) OpenURL(url string) error {
+	return winutil.ShellOpen(url)
 }
 
 // RecentLogs returns up to the last n JSON log lines from the log file, oldest
@@ -648,7 +884,7 @@ func (a *API) InstallAutoStart() error {
 	cmd := exec.Command(schtasksPath,
 		"/Create", "/F",
 		"/TN", AutoStartTaskName,
-		"/TR", "\""+exe+"\"",
+		"/TR", "\""+exe+"\" --minimized",
 		"/SC", "ONLOGON",
 		"/RL", "HIGHEST",
 	)

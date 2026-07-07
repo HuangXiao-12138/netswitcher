@@ -20,7 +20,7 @@ import (
 // Single-instance: if another GUI is already running, this instance signals
 // it to show its window (it may be hidden to tray) and exits. CLI subcommands
 // (dump/apply/ipc) bypass this and can run alongside the GUI.
-func runGUI(version string, takeover bool) error {
+func runGUI(version string, takeover bool, minimized bool) error {
 	if dir, err := paths.LogDir(); err == nil {
 		_, _ = logging.Configure("info", dir)
 	}
@@ -71,7 +71,7 @@ func runGUI(version string, takeover bool) error {
 	if err := winutil.AssignSelfToKillOnCloseJob(); err != nil {
 		infof("warning: job object not applied: %v", err)
 	}
-	err = gui.Run(gui.Options{Title: "NetSwitcher", Width: 1024, Height: 700, Version: version, Takeover: takeover})
+	err = gui.Run(gui.Options{Title: "NetSwitcher", Width: 1024, Height: 700, Version: version, Takeover: takeover, Minimized: minimized})
 	if err == nil {
 		return nil
 	}
@@ -87,10 +87,12 @@ func newGUICmd(version string) *cobra.Command {
 		Use:   "gui",
 		Short: "启动桌面 GUI",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runGUI(version, takeoverFlag)
+			return runGUI(version, takeoverFlag, minimizedFlag)
 		},
 	}
 	cmd.Flags().BoolVar(&takeoverFlag, "takeover", false, "内部:提权重启接管模式")
+	cmd.Flags().BoolVar(&minimizedFlag, "minimized", false, "内部:启动隐藏到托盘(开机自启用)")
 	_ = cmd.Flags().MarkHidden("takeover")
+	_ = cmd.Flags().MarkHidden("minimized")
 	return cmd
 }

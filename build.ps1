@@ -4,8 +4,17 @@
 #   .\build.ps1 -CliOnly   # service/CLI only (no gcc)
 param(
   [switch]$CliOnly,
-  [string]$Version = "0.1.0"
+  [string]$Version
 )
+
+# Default VERSION to the git-derived version (a tag like "v1.2.0", or
+# "v1.2.0-3-gabcdef" / "v1.2.0-dirty" when ahead of a tag) so local builds
+# match CI's semantics — checking for updates compares against the same scheme
+# GitHub Releases uses. Pass -Version X to override.
+if (-not $Version) {
+  $Version = (git describe --tags --always --dirty 2>$null)
+  if (-not $Version) { $Version = "dev" }
+}
 
 $ErrorActionPreference = "Stop"
 $Binary = "build/bin/NetSwitcher.exe"

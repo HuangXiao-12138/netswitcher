@@ -27,6 +27,7 @@
   let status: StatusResponse | null = null;
   let busy = false;
   let maximised = false;
+  let checkUpdateTrigger = 0;
 
   async function refreshState() {
     checking = true;
@@ -97,6 +98,10 @@
     events.on(EVT.statusChanged, (st: StatusResponse) => {
       status = st;
       engineActive = true;
+    });
+    events.on(EVT.trayCheckUpdate, () => {
+      page = "settings";
+      checkUpdateTrigger++;
     });
     window.addEventListener("focus", refreshState);
   });
@@ -171,7 +176,7 @@
     {:else if page === "logs"}
       <Logs />
     {:else if page === "settings"}
-      <Settings />
+      <Settings checkUpdateTrigger={checkUpdateTrigger} />
     {/if}
   </section>
 </main>

@@ -44,3 +44,7 @@ export function GetAppInfo(): Promise<AppInfo>;
 export function GetLogLevel(): Promise<string>;
 export function SetLogLevel(level: string): Promise<void>;
 export function OpenLogFolder(): Promise<void>;
+export function CheckUpdate(): Promise<UpdateInfo>;
+export function OpenURL(url: string): Promise<void>;
+export function PerformUpdate(): Promise<void>;
+export function CancelUpdate(): Promise<void>;

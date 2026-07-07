@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import { api, getTheme, setTheme, type ThemeId } from "../lib/ipc";
-  import type { AppInfo } from "../../wailsjs/go/models";
+  import { api, events, EVT, getTheme, setTheme, type ThemeId } from "../lib/ipc";
+  import type { AppInfo, UpdateInfo } from "../../wailsjs/go/models";
 
   const levels = ["debug", "info", "warn", "error"];
   const themes: { id: ThemeId; name: string; desc: string }[] = [
@@ -17,6 +17,18 @@
   let busy = false;
   let msg = "";
   let theme: ThemeId = "a";
+  let upd: UpdateInfo | null = null;
+  let checking = false;
+  let releaseErr = "";
+  let upgradeModal = false;
+  let upgradeStage: "preparing" | "downloading" | "installing" | "armed" | "failed" = "preparing";
+  let downloadPct = -1; // -1 when the total is unknown
+  let upgradeErr = "";
+
+  // Bumped by App when the tray "检查更新" item is clicked — each change
+  // triggers a check. Starts at 0 so the reactive block is inert on mount.
+  export let checkUpdateTrigger = 0;
+  $: if (checkUpdateTrigger) checkUpdate();
 
   onMount(async () => {
     theme = getTheme();
@@ -100,6 +112,97 @@
     }
   }
 
+  async function checkUpdate() {
+    checking = true;
+    releaseErr = "";
+    try {
+      upd = await api.checkUpdate();
+    } catch (e: any) {
+      // Backend categorizes failures into upd.errorKind, so a reject here can
+      // only be an IPC-level fault — synthesize an error state as a fallback.
+      upd = {
+        currentVersion: info?.version ?? "",
+        isDevBuild: true,
+        errorKind: "unknown",
+        error: "检查更新失败：" + (e?.message ?? e),
+      } as UpdateInfo;
+    } finally {
+      checking = false;
+    }
+  }
+
+  async function openRelease(url: string) {
+    releaseErr = "";
+    try {
+      await api.openURL(url);
+    } catch (e: any) {
+      releaseErr = "无法打开页面：" + (e?.message ?? e);
+    }
+  }
+
+  function onProgress(p: any) {
+    switch (p?.stage) {
+      case "preparing":
+        upgradeStage = "preparing";
+        break;
+      case "downloading":
+        upgradeStage = "downloading";
+        downloadPct = p.total > 0 ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : -1;
+        break;
+      case "installing":
+        upgradeStage = "installing";
+        break;
+      case "armed":
+        upgradeStage = "armed";
+        events.off(EVT.updateProgress);
+        break;
+      case "failed":
+        upgradeStage = "failed";
+        upgradeErr = p?.error ?? "升级失败";
+        events.off(EVT.updateProgress);
+        break;
+    }
+  }
+
+  function openUpgrade() {
+    upgradeModal = true;
+    upgradeStage = "preparing";
+    downloadPct = -1;
+    upgradeErr = "";
+    events.on(EVT.updateProgress, onProgress);
+    api.performUpdate().catch((e: any) => {
+      upgradeStage = "failed";
+      upgradeErr = e?.message ?? String(e);
+      events.off(EVT.updateProgress);
+    });
+  }
+
+  function cancelUpgrade() {
+    api.cancelUpdate().catch(() => {});
+    events.off(EVT.updateProgress);
+    upgradeModal = false;
+  }
+
+  function restartNow() {
+    api.quit().catch(() => {});
+  }
+
+  function stageLabel(stage: string): string {
+    switch (stage) {
+      case "preparing":
+        return "正在获取版本信息……";
+      case "installing":
+        return "正在准备安装……";
+      default:
+        return "升级中……";
+    }
+  }
+
+  function formatDate(iso: string): string {
+    const d = new Date(iso);
+    return isNaN(d.getTime()) ? iso : d.toLocaleDateString("zh-CN");
+  }
+
   $: levelDesc = {
     debug: "最详细（含每次 apply 的全部 route 命令）",
     info: "常规（apply / 网络变化 / 配置变化）",
@@ -179,14 +282,97 @@
 </div>
 
 <div class="card section about">
-  <h3>关于</h3>
+  <div class="section-head">
+    <h3>关于</h3>
+    <button on:click={checkUpdate} disabled={checking || !info}>
+      {checking ? "检查中…" : "检查更新"}
+    </button>
+  </div>
   <dl>
     <dt>版本</dt><dd>{info?.version ?? "—"}</dd>
     <dt>权限</dt><dd>{info?.elevated ? "管理员" : "普通用户"}</dd>
     <dt>配置文件</dt><dd class="mono">{info?.configPath ?? "—"}</dd>
     <dt>状态文件</dt><dd class="mono">{info?.statePath ?? "—"}</dd>
   </dl>
+  {#if upd}
+    <div class="upd">
+      {#if upd.errorKind}
+        <p class="upd-err">{upd.error}</p>
+        <button class="link" on:click={checkUpdate} disabled={checking}>重试</button>
+      {:else if upd.isDevBuild}
+        <p class="muted">
+          开发版本（{upd.currentVersion}），最新发布版为 <strong>{upd.latestVersion}</strong>。
+        </p>
+        <button class="link" on:click={() => openRelease(upd.releaseURL)}>查看发布页 ↗</button>
+      {:else if upd.hasUpdate}
+        <p class="muted">
+          发现新版本 <strong>{upd.latestVersion}</strong>（当前 {upd.currentVersion}）。
+        </p>
+        {#if info?.elevated}
+          <button class="link" on:click={openUpgrade}>一键升级</button>
+          <span class="muted"> · </span>
+        {/if}
+        <button class="link" on:click={() => openRelease(upd.releaseURL)}>前往下载 ↗</button>
+      {:else}
+        <p class="muted">已是最新版本（{upd.currentVersion}）。</p>
+      {/if}
+      {#if upd.publishedAt && !upd.errorKind}
+        <p class="muted">发布于 {formatDate(upd.publishedAt)}</p>
+      {/if}
+      {#if releaseErr}
+        <p class="upd-err">{releaseErr}</p>
+      {/if}
+    </div>
+  {/if}
 </div>
+
+{#if upgradeModal}
+  <div class="upd-backdrop">
+    <div class="upd-modal">
+      <h3>升级到 {upd?.latestVersion ?? ""}</h3>
+
+      <div class="upd-version">
+        <span class="cur">{upd?.currentVersion ?? ""}</span>
+        <span class="arrow">→</span>
+        <span class="new">{upd?.latestVersion ?? ""}</span>
+      </div>
+
+      {#if upd?.releaseNotes}
+        <div class="upd-notes">
+          <div class="upd-notes-title">更新内容</div>
+          <div class="upd-notes-body">{upd.releaseNotes}</div>
+        </div>
+      {/if}
+
+      <div class="upd-stage">
+        {#if upgradeStage === "downloading" && downloadPct >= 0}
+          <div class="upd-stage-label">正在下载 {downloadPct}%</div>
+          <div class="upd-bar"><div class="upd-fill" style="width:{downloadPct}%"></div></div>
+        {:else if upgradeStage === "armed"}
+          <div class="upd-done">✓ 新版本已就绪，点击下方按钮重启完成安装。</div>
+        {:else if upgradeStage === "failed"}
+          <div class="upd-err">{upgradeErr}</div>
+        {:else}
+          <div class="upd-stage-label">{stageLabel(upgradeStage)}</div>
+          <div class="upd-bar indeterminate"><div class="upd-fill"></div></div>
+        {/if}
+      </div>
+
+      <div class="upd-actions">
+        {#if upgradeStage === "armed"}
+          <button class="primary" on:click={restartNow}>立即重启</button>
+        {:else if upgradeStage === "failed"}
+          <button on:click={openUpgrade}>重试</button>
+          <button class="ghost" on:click={() => { upgradeModal = false; }}>关闭</button>
+        {:else if upgradeStage === "installing"}
+          <button disabled>正在准备安装…</button>
+        {:else}
+          <button class="ghost" on:click={cancelUpgrade}>取消</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
 
 <style>
   .head { margin-bottom: 14px; }
@@ -229,4 +415,44 @@
   .theme-name { font-size: 13px; font-weight: 600; color: var(--text); }
   .theme-desc { font-size: 11.5px; color: var(--text-dim); line-height: 1.4; }
   .theme-tag { position: absolute; top: 8px; right: 10px; font-family: var(--font-mono); font-size: 10px; color: var(--text-faint); }
+
+  /* Update-check block inside 关于. */
+  .upd { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--border); }
+  .upd .muted { margin: 4px 0; }
+  .upd-err { color: var(--bad); font-size: 12.5px; margin: 4px 0; line-height: 1.5; }
+  .link { background: none; border: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12.5px; }
+  .link:hover { text-decoration: underline; }
+
+  /* Upgrade modal. */
+  .upd-backdrop {
+    position: fixed; inset: 0; background: rgba(8,10,15,0.72);
+    display: flex; align-items: center; justify-content: center; z-index: 60;
+  }
+  .upd-modal {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; width: 440px; max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .upd-modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .upd-version { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-family: var(--font-mono); font-size: 13px; }
+  .upd-version .cur { color: var(--text-dim); }
+  .upd-version .new { color: var(--accent); font-weight: 600; }
+  .upd-version .arrow { color: var(--text-faint); }
+  .upd-notes { margin-bottom: 14px; }
+  .upd-notes-title { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .upd-notes-body {
+    font-size: 12.5px; line-height: 1.6; white-space: pre-wrap;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; max-height: 160px; overflow-y: auto;
+  }
+  .upd-stage { margin-bottom: 16px; }
+  .upd-stage-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .upd-bar { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .upd-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 200ms ease; }
+  .upd-bar.indeterminate .upd-fill { width: 40%; animation: upd-indet 1.2s ease-in-out infinite; }
+  @keyframes upd-indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .upd-done { color: var(--good); font-size: 13px; }
+  .upd-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+  .upd-actions .primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .upd-actions .ghost { background: transparent; }
 </style>

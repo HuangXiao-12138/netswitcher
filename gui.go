@@ -14,10 +14,11 @@ var ErrGUINotCompiled = errors.New("GUI not compiled into this build; rebuild wi
 
 // Options configures the GUI launcher.
 type Options struct {
-	Title    string
-	Width    int
-	Height   int
-	Version  string // build version, surfaced on the Settings page
-	Bindings []any  // objects whose exported methods are exposed to the frontend
-	Takeover bool   // elevated-relaunch replacement: isolate WebView2 data dir
+	Title     string
+	Width     int
+	Height    int
+	Version   string // build version, surfaced on the Settings page
+	Bindings  []any  // objects whose exported methods are exposed to the frontend
+	Takeover  bool   // elevated-relaunch replacement: isolate WebView2 data dir
+	Minimized bool   // auto-start: start hidden in the tray (no window flash on login)
 }

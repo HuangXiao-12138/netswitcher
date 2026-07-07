@@ -159,3 +159,18 @@ export interface AppInfo {
   logDir: string;
   pipeName?: string;
 }
+
+// ----- appapi.UpdateInfo (Settings page — update check) -----
+
+export interface UpdateInfo {
+  currentVersion: string;
+  latestVersion: string;
+  hasUpdate: boolean; // true only for release builds behind latest
+  isDevBuild: boolean; // true when current isn't a clean vX.Y.Z
+  releaseURL: string;
+  releaseNotes: string;
+  publishedAt: string; // RFC3339, empty if unknown
+  zipURL: string;
+  error: string; // empty on success; user-facing message on failure
+  errorKind: string; // "" | "network" | "notfound" | "http" | "parse" | "unknown"
+}
