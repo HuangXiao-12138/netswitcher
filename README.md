@@ -113,4 +113,4 @@ NetSwitcher.exe --help
 
 ## 许可
 
-暂未指定（内部使用）。
+MIT — 随意使用、修改、分发（含商用），保留版权声明即可。详见 [LICENSE](LICENSE)。
