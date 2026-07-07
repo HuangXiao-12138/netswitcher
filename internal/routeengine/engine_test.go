@@ -253,7 +253,9 @@ func TestApply_MetricManagement(t *testing.T) {
 	p := officeProfile()
 	p.AutoManageMetrics = boolPtr(true)
 	eng.Apply(p, sampleSnap(), "metric")
-	// WLAN should get preferred (10), 以太网 others (50).
+	// Only the preferred interface (WLAN) gets a metric now; others are left
+	// untouched (applyMetrics no longer sets others, to avoid interfering with
+	// VPN / virtual adapters).
 	var wlan, eth *mockMetricSet
 	for i := range met.sets {
 		if met.sets[i].iface == "WLAN" {
@@ -266,8 +268,8 @@ func TestApply_MetricManagement(t *testing.T) {
 	if wlan == nil || wlan.metric != config.DefaultPreferredMetric {
 		t.Errorf("WLAN metric = %+v, want %d", wlan, config.DefaultPreferredMetric)
 	}
-	if eth == nil || eth.metric != config.DefaultOthersMetric {
-		t.Errorf("以太网 metric = %+v, want %d", eth, config.DefaultOthersMetric)
+	if eth != nil {
+		t.Errorf("以太网 metric = %+v, want nil (only preferred is managed)", eth)
 	}
 }
 
