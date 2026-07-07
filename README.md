@@ -71,6 +71,16 @@ NetSwitcher.exe --help
 
 `%ProgramData%\NetSwitcher\`：`config.json`（配置）、`state.json`（上次下发的路由）、`logs\netswitcher.log`（按天滚动，保留 7 天）。
 
+## 截图
+
+**状态页** — 接口卡片、已下发路由、冲突告警：
+
+![状态页](docs/images/status.webp)
+
+**配置页** — 路由规则、域名解析规则、高级设置：
+
+![配置页](docs/images/profiles.webp)
+
 ## 页面
 
 | 页 | 功能 |
