@@ -14,6 +14,14 @@ import (
 	"time"
 )
 
+// Force direct connections: tests assert network-level behavior (e.g.
+// "connection refused → ErrNetwork") that the host's system proxy would
+// perturb (a proxy returns HTTP errors instead of letting the connection fail).
+func TestMain(m *testing.M) {
+	os.Setenv("NO_PROXY", "*")
+	os.Exit(m.Run())
+}
+
 func TestIsReleaseBuild(t *testing.T) {
 	tests := []struct {
 		in   string

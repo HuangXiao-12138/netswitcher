@@ -67,7 +67,7 @@ func FetchLatest(ctx context.Context, endpoint string) (*Release, error) {
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "NetSwitcher")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient().Do(req)
 	if err != nil {
 		// ctx cancel / deadline surfaces here too — classify as network so the
 		// UI shows "无法连接" rather than a raw deadline-exceeded string.

@@ -112,14 +112,14 @@ func (a *API) OnStartup(ctx context.Context) {
 		}
 	}()
 	if len(a.IconBytes) > 0 {
-		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.checkUpdateFromTray, a.quitApp)
+		go tray.Run(a.IconBytes, a.showWindow, a.applyNow, a.quitApp)
 	}
 	if a.elevated {
 		a.startEngine()
 	}
-	// NOTE: subscribeStatusLoop is started inside startEngine (after a.core
-	// exists). Launching it here raced startEngine and saw a.core == nil →
-	// returned early → never subscribed → frontend got no status pushes.
+	// Silent startup update check — surfaces a top-bar badge if a newer
+	// release exists. Network failures/dev builds/no-update stay quiet.
+	go a.startUpdateCheck()
 }
 
 // startEngine brings up the in-process route engine (core). Idempotent.
@@ -485,14 +485,6 @@ func (a *API) applyNow() {
 	}
 }
 
-// checkUpdateFromTray is the tray "检查更新" handler: bring the window to the
-// front and tell the frontend to switch to Settings and run the check. The
-// actual GitHub probe happens via CheckUpdate() so the result renders inline.
-func (a *API) checkUpdateFromTray() {
-	a.showWindow()
-	a.emit("tray:check-update", nil)
-}
-
 // Quit is the frontend-facing exit (the elevation modal's "退出" button).
 // Same as the tray quit: arm quitting so OnBeforeClose doesn't minimize to
 // tray, then runtime.Quit.
@@ -601,6 +593,35 @@ func (a *API) CheckUpdate() (UpdateInfo, error) {
 		info.HasUpdate = updater.HasNewer(a.Version, rel.TagName)
 	}
 	return info, nil
+}
+
+// startUpdateCheck runs once at startup to surface a "new version available"
+// top-bar badge without user action. Silent: on network error, dev build, or
+// no update it emits nothing (no nag). Only emits "update:available" when a
+// real release build is behind latest.
+func (a *API) startUpdateCheck() {
+	// Let the frontend wire up its event listener before we emit.
+	time.Sleep(3 * time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	rel, err := updater.FetchLatest(ctx, updater.RepoAPI)
+	if err != nil {
+		return
+	}
+	info := UpdateInfo{
+		CurrentVersion: a.Version,
+		LatestVersion:  rel.TagName,
+		ReleaseURL:     rel.HTMLURL,
+		ReleaseNotes:   rel.Body,
+		ZipURL:         rel.ZipURL,
+		IsDevBuild:     !updater.IsReleaseBuild(a.Version),
+	}
+	if !info.IsDevBuild {
+		info.HasUpdate = updater.HasNewer(a.Version, rel.TagName)
+	}
+	if info.HasUpdate {
+		a.emit("update:available", info)
+	}
 }
 
 // friendlyUpdateMessage maps an updater error kind to a user-facing string.

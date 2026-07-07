@@ -28,7 +28,7 @@ func DownloadAndExtract(ctx context.Context, zipURL, destDir string, onProgress 
 	req.Header.Set("User-Agent", "NetSwitcher")
 	req.Header.Set("Accept", "application/octet-stream")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpClient().Do(req)
 	if err != nil {
 		return "", &FetchError{Kind: ErrNetwork, Msg: err.Error()}
 	}

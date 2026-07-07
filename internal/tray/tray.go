@@ -15,11 +15,11 @@ import (
 
 // Run starts the tray. Blocks until systray.Quit is called. iconBytes is the
 // .ico content. The callbacks are invoked from the tray menu goroutine.
-func Run(iconBytes []byte, onShow, onApply, onCheckUpdate, onQuit func()) {
-	systray.Run(func() { onReady(iconBytes, onShow, onApply, onCheckUpdate, onQuit) }, func() {})
+func Run(iconBytes []byte, onShow, onApply, onQuit func()) {
+	systray.Run(func() { onReady(iconBytes, onShow, onApply, onQuit) }, func() {})
 }
 
-func onReady(iconBytes []byte, onShow, onApply, onCheckUpdate, onQuit func()) {
+func onReady(iconBytes []byte, onShow, onApply, onQuit func()) {
 	systray.SetIcon(iconBytes)
 	systray.SetTitle("")
 	systray.SetTooltip("NetSwitcher — 内外网路由管理")
@@ -30,7 +30,6 @@ func onReady(iconBytes []byte, onShow, onApply, onCheckUpdate, onQuit func()) {
 	mShow := systray.AddMenuItem("显示主窗口", "显示 NetSwitcher 主界面")
 	systray.AddSeparator()
 	mApply := systray.AddMenuItem("立即重新应用路由", "触发一次 apply")
-	mUpdate := systray.AddMenuItem("检查更新", "检查 NetSwitcher 新版本")
 	systray.AddSeparator()
 	mQuit := systray.AddMenuItem("退出 NetSwitcher", "退出程序（服务继续运行）")
 
@@ -41,8 +40,6 @@ func onReady(iconBytes []byte, onShow, onApply, onCheckUpdate, onQuit func()) {
 				safe(onShow, "show window")
 			case <-mApply.ClickedCh:
 				safe(onApply, "apply now")
-			case <-mUpdate.ClickedCh:
-				safe(onCheckUpdate, "check update")
 			case <-mQuit.ClickedCh:
 				systray.Quit()
 				safe(onQuit, "quit")

@@ -46,6 +46,7 @@ move /y "%[2]s" "%[1]s" >nul
 if exist "%[1]s" (
   echo [%%time%%] move OK, cleanup + relaunch >> "%%LOG%%"
   del /f /q "%[3]s\%[5]s" >nul 2>nul
+  rmdir /s /q "%[7]s" >nul 2>nul
   start "" "%[1]s"
 ) else (
   echo [%%time%%] move FAILED, rolling back >> "%%LOG%%"
@@ -80,8 +81,9 @@ func ReplaceAndRestart(newExePath string) error {
 	base := filepath.Base(curExe)
 	old := base + ".old"
 	pid := os.Getpid()
+	tmpDir := filepath.Dir(newExePath)
 
-	bat := fmt.Sprintf(batTemplate, curExe, newExePath, dir, base, old, pid)
+	bat := fmt.Sprintf(batTemplate, curExe, newExePath, dir, base, old, pid, tmpDir)
 	batPath := filepath.Join(os.TempDir(), "ns-replace.bat")
 	if err := os.WriteFile(batPath, []byte(bat), 0o644); err != nil {
 		return fmt.Errorf("write helper batch: %w", err)

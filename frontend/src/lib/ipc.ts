@@ -111,6 +111,6 @@ export const EVT = {
   logLine: "log:line",
   logEnd: "log:end",
   statusChanged: "status:changed",
-  trayCheckUpdate: "tray:check-update",
   updateProgress: "update:progress",
+  updateAvailable: "update:available",
 } as const;

@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import { api, events, EVT, wc, getTheme, setTheme } from "./lib/ipc";
-  import type { StatusResponse } from "../wailsjs/go/models";
+  import type { StatusResponse, UpdateInfo } from "../wailsjs/go/models";
   import Status from "./pages/Status.svelte";
   import Profiles from "./pages/Profiles.svelte";
   import Routes from "./pages/Routes.svelte";
@@ -27,7 +27,18 @@
   let status: StatusResponse | null = null;
   let busy = false;
   let maximised = false;
-  let checkUpdateTrigger = 0;
+  let updateInfo: UpdateInfo | null = null;
+  // Upgrade modal lives here (global) so the topbar badge can open it from any
+  // page without navigating to Settings first.
+  let upgradeModal = false;
+  let upgradeStage: "preparing" | "downloading" | "installing" | "armed" | "failed" = "preparing";
+  let downloadPct = -1;
+  let upgradeErr = "";
+  // Auto-restart countdown once the swap is armed (the helper batch can only
+  // complete once we exit, so we don't offer "later" — just a few seconds of
+  // grace before forcing it, clickable to skip).
+  let restartTimer: ReturnType<typeof setInterval> | null = null;
+  let restartCountdown = 0;
 
   async function refreshState() {
     checking = true;
@@ -43,7 +54,6 @@
 
   async function toggleMax() {
     await wc.toggleMax();
-    // Update the icon after the toggle lands.
     setTimeout(async () => { maximised = await api.isMaximised().catch(() => false); }, 60);
   }
 
@@ -59,8 +69,6 @@
     busy = true;
     try {
       await api.relaunchElevated();
-      // The elevated instance is starting; this one will quit on its own
-      // (handled Go-side). Give it a moment then close the window.
       setTimeout(() => window.close(), 800);
     } catch (e: any) {
       alert("无法以管理员身份重启：" + (e?.message ?? e));
@@ -84,9 +92,92 @@
     }
   }
 
-  // Non-elevated runs are blocked entirely — admin is required to touch routes,
-  // so there's no useful "read-only" mode. The modal can only be dismissed by
-  // relaunching elevated (or closing the window).
+  // ---------- Upgrade ----------
+
+  function onProgress(p: any) {
+    switch (p?.stage) {
+      case "preparing":
+        upgradeStage = "preparing";
+        break;
+      case "downloading":
+        upgradeStage = "downloading";
+        downloadPct = p.total > 0 ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : -1;
+        break;
+      case "installing":
+        upgradeStage = "installing";
+        break;
+      case "armed":
+        upgradeStage = "armed";
+        events.off(EVT.updateProgress);
+        startRestartCountdown();
+        break;
+      case "failed":
+        upgradeStage = "failed";
+        upgradeErr = p?.error ?? "升级失败";
+        events.off(EVT.updateProgress);
+        break;
+    }
+  }
+
+  async function openUpgrade() {
+    // Ensure we have update info (badge may be clicked before the startup
+    // check finishes). If there's no update after all, fall back to Settings.
+    if (!updateInfo?.hasUpdate) {
+      try { updateInfo = await api.checkUpdate(); } catch { /* surfaced in Settings */ }
+    }
+    if (!updateInfo?.hasUpdate) {
+      page = "settings";
+      return;
+    }
+    upgradeModal = true;
+    upgradeStage = "preparing";
+    downloadPct = -1;
+    upgradeErr = "";
+    events.on(EVT.updateProgress, onProgress);
+    api.performUpdate().catch((e: any) => {
+      upgradeStage = "failed";
+      upgradeErr = e?.message ?? String(e);
+      events.off(EVT.updateProgress);
+    });
+  }
+
+  function cancelUpgrade() {
+    api.cancelUpdate().catch(() => {});
+    events.off(EVT.updateProgress);
+    upgradeModal = false;
+  }
+
+  function startRestartCountdown() {
+    restartCountdown = 5;
+    if (restartTimer) clearInterval(restartTimer);
+    restartTimer = setInterval(() => {
+      restartCountdown -= 1;
+      if (restartCountdown <= 0) {
+        restartNow();
+      }
+    }, 1000);
+  }
+
+  function restartNow() {
+    if (restartTimer) {
+      clearInterval(restartTimer);
+      restartTimer = null;
+    }
+    api.quit().catch(() => {});
+  }
+
+  function stageLabel(stage: string): string {
+    switch (stage) {
+      case "preparing":
+        return "正在获取版本信息……";
+      case "installing":
+        return "正在准备安装……";
+      default:
+        return "升级中……";
+    }
+  }
+
+  // Non-elevated runs are blocked entirely — admin is required to touch routes.
   $: showElevationModal = !elevated;
   // Auto-start nudge: elevated but not configured for boot launch.
   $: showAutoStartNudge = elevated && !autoStart;
@@ -99,15 +190,16 @@
       status = st;
       engineActive = true;
     });
-    events.on(EVT.trayCheckUpdate, () => {
-      page = "settings";
-      checkUpdateTrigger++;
+    events.on(EVT.updateAvailable, (info: UpdateInfo) => {
+      updateInfo = info;
     });
+    events.on(EVT.updateProgress, onProgress);
     window.addEventListener("focus", refreshState);
   });
 
   onDestroy(() => {
-    try { events.off(EVT.statusChanged); } catch {}
+    if (restartTimer) clearInterval(restartTimer);
+    try { events.off(EVT.statusChanged); events.off(EVT.updateProgress); } catch {}
   });
 </script>
 
@@ -129,6 +221,15 @@
         <span class="pill warn"><span class="dot"></span>引擎未启动</span>
       {/if}
     </div>
+    {#if updateInfo?.hasUpdate}
+      <button
+        class="upd-badge"
+        title="发现新版本 {updateInfo.latestVersion}，点击升级"
+        on:click={openUpgrade}
+      >
+        <span class="upd-badge-dot"></span>有新版本 {updateInfo.latestVersion}
+      </button>
+    {/if}
     <div class="win-ctrl">
       <button class="win-btn" title="最小化" on:click={wc.minimise}><span class="ico-min"></span></button>
       <button class="win-btn" title={maximised ? "还原" : "最大化"} on:click={toggleMax}>
@@ -176,7 +277,7 @@
     {:else if page === "logs"}
       <Logs />
     {:else if page === "settings"}
-      <Settings checkUpdateTrigger={checkUpdateTrigger} />
+      <Settings onUpgrade={openUpgrade} />
     {/if}
   </section>
 </main>
@@ -205,19 +306,59 @@
   </div>
 {/if}
 
+{#if upgradeModal}
+  <div class="upd-backdrop">
+    <div class="upd-modal">
+      <h3>升级到 {updateInfo?.latestVersion ?? ""}</h3>
+
+      <div class="upd-version">
+        <span class="cur">{updateInfo?.currentVersion ?? ""}</span>
+        <span class="arrow">→</span>
+        <span class="new">{updateInfo?.latestVersion ?? ""}</span>
+      </div>
+
+      {#if updateInfo?.releaseNotes}
+        <div class="upd-notes">
+          <div class="upd-notes-title">更新内容</div>
+          <div class="upd-notes-body">{updateInfo.releaseNotes}</div>
+        </div>
+      {/if}
+
+      <div class="upd-stage">
+        {#if upgradeStage === "downloading" && downloadPct >= 0}
+          <div class="upd-stage-label">正在下载 {downloadPct}%</div>
+          <div class="upd-bar"><div class="upd-fill" style="width:{downloadPct}%"></div></div>
+        {:else if upgradeStage === "armed"}
+          <div class="upd-done">新版本已就绪，{restartCountdown} 秒后自动重启。</div>
+        {:else if upgradeStage === "failed"}
+          <div class="upd-err">{upgradeErr}</div>
+        {:else}
+          <div class="upd-stage-label">{stageLabel(upgradeStage)}</div>
+          <div class="upd-bar indeterminate"><div class="upd-fill"></div></div>
+        {/if}
+      </div>
+
+      <div class="upd-actions">
+        {#if upgradeStage === "armed"}
+          <button class="primary" on:click={restartNow}>立即重启</button>
+        {:else if upgradeStage === "failed"}
+          <button on:click={openUpgrade}>重试</button>
+          <button class="ghost" on:click={() => { upgradeModal = false; }}>关闭</button>
+        {:else if upgradeStage === "installing"}
+          <button disabled>正在准备安装…</button>
+        {:else}
+          <button class="ghost" on:click={cancelUpgrade}>取消</button>
+        {/if}
+      </div>
+    </div>
+  </div>
+{/if}
+
 <style>
   .topbar {
     display: flex; align-items: center; justify-content: space-between;
-    /* Fixed height so the window buttons (height:100%) fill the whole bar on
-       hover; no top/bottom padding — buttons cover it instead. */
     height: 44px; padding: 0 0 0 16px; border-bottom: 1px solid var(--border); background: var(--bg-1);
-    /* Wails frameless drag uses the --wails-draggable CSS property (NOT
-       -webkit-app-region). Any descendant that should be clickable must
-       override it to a non-"drag" value. */
     --wails-draggable: drag;
-    /* user-select:none stops text selection from competing with the drag
-       handler — without it clicks on the title text often show the "no" cursor
-       and refuse to drag. */
     user-select: none;
   }
   .brand { display: flex; align-items: center; gap: 10px; }
@@ -240,8 +381,17 @@
   .pill.warn { color: var(--warn); border-color: rgba(251,191,36,0.3); }
   .pill.warn .dot { background: var(--warn); }
 
-  /* Custom window controls (frameless). Override the inherited drag property
-     so the buttons are clickable, not drag-handles. */
+  /* Update-available badge in the topbar. */
+  .upd-badge {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    font-size: 12px; padding: 4px 11px; border-radius: 999px;
+    border: 1px solid rgba(95,184,255,0.4); color: var(--accent);
+    background: rgba(95,184,255,0.08);
+  }
+  .upd-badge:hover { background: rgba(95,184,255,0.16); }
+  .upd-badge-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+
+  /* Custom window controls (frameless). */
   .win-ctrl { display: flex; align-items: stretch; --wails-draggable: no-drag; }
   .win-btn {
     width: 46px; height: 44px; padding: 0; background: transparent;
@@ -254,16 +404,13 @@
   .win-btn span { display: inline-block; }
   .ico-min { width: 12px; height: 1.5px; background: currentColor; }
   .ico-max { width: 11px; height: 11px; border: 1.5px solid currentColor; }
-  /* Restore: two overlapping squares (the maximized → normal indicator). */
   .ico-restore { width: 14px; height: 14px; position: relative; }
   .ico-restore::before, .ico-restore::after {
     content: ""; position: absolute; width: 9px; height: 9px; border: 1.5px solid currentColor;
   }
   .ico-restore::before { left: 0; top: 4px; }
   .ico-restore::after { left: 4px; top: 0; background: var(--bg-1); }
-  .ico-close {
-    width: 14px; height: 14px; position: relative;
-  }
+  .ico-close { width: 14px; height: 14px; position: relative; }
   .ico-close::before, .ico-close::after {
     content: ""; position: absolute; left: 6px; top: 1px; width: 1.5px; height: 12px;
     background: currentColor; border-radius: 1px;
@@ -271,9 +418,7 @@
   .ico-close::before { transform: rotate(45deg); }
   .ico-close::after { transform: rotate(-45deg); }
 
-  .banner {
-    display: flex; align-items: center; gap: 12px; padding: 10px 18px;
-  }
+  .banner { display: flex; align-items: center; gap: 12px; padding: 10px 18px; }
   .banner.info { background: rgba(95,184,255,0.08); border-bottom: 1px solid rgba(95,184,255,0.25); }
   .banner-text { flex: 1; font-size: 13px; }
 
@@ -309,4 +454,38 @@
   .modal-bullets { margin: 10px 0; padding-left: 20px; font-size: 12.5px; color: var(--text-dim); line-height: 1.7; }
   .modal-bullets li::marker { color: var(--accent); }
   .modal-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+  /* Upgrade modal (global, opened from topbar badge or Settings). */
+  .upd-backdrop {
+    position: fixed; inset: 0; background: rgba(8,10,15,0.72);
+    display: flex; align-items: center; justify-content: center; z-index: 60;
+  }
+  .upd-modal {
+    background: var(--bg-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; width: 440px; max-width: 90vw; max-height: 80vh; overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+  }
+  .upd-modal h3 { margin: 0 0 10px; font-size: 16px; }
+  .upd-version { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; font-family: var(--font-mono); font-size: 13px; }
+  .upd-version .cur { color: var(--text-dim); }
+  .upd-version .new { color: var(--accent); font-weight: 600; }
+  .upd-version .arrow { color: var(--text-faint); }
+  .upd-notes { margin-bottom: 14px; }
+  .upd-notes-title { font-size: 12px; color: var(--text-dim); margin-bottom: 6px; }
+  .upd-notes-body {
+    font-size: 12.5px; line-height: 1.6; white-space: pre-wrap;
+    background: var(--bg-2); border: 1px solid var(--border); border-radius: 6px;
+    padding: 10px 12px; max-height: 160px; overflow-y: auto;
+  }
+  .upd-stage { margin-bottom: 16px; }
+  .upd-stage-label { font-size: 12.5px; color: var(--text-dim); margin-bottom: 6px; }
+  .upd-bar { height: 6px; background: var(--bg-3); border-radius: 3px; overflow: hidden; }
+  .upd-fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width 200ms ease; }
+  .upd-bar.indeterminate .upd-fill { width: 40%; animation: upd-indet 1.2s ease-in-out infinite; }
+  @keyframes upd-indet { 0% { margin-left: -40%; } 100% { margin-left: 100%; } }
+  .upd-done { color: var(--good); font-size: 13px; }
+  .upd-err { color: var(--bad); font-size: 12.5px; margin: 4px 0; line-height: 1.5; }
+  .upd-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 4px; }
+  .upd-actions .primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .upd-actions .ghost { background: transparent; }
 </style>
