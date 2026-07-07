@@ -9,6 +9,7 @@
     { id: "b", name: "现代扁平", desc: "Linear / Notion 风克制现代" },
     { id: "c", name: "终端主题", desc: "等宽字体 + 角标 + 青光" },
   ];
+  const REPO_URL = "https://github.com/HuangXiao-12138/netswitcher";
 
   let info: AppInfo | null = null;
   let logLevel = "info";
@@ -226,7 +227,12 @@
     </button>
   </div>
   <dl>
-    <dt>版本</dt><dd>{info?.version ?? "—"}</dd>
+    <dt>版本</dt>
+    <dd>
+      {info?.version ?? "—"}
+      <button class="link repo-link" on:click={() => openRelease(REPO_URL)}>GitHub ↗</button>
+      <button class="link repo-link" on:click={() => openRelease(REPO_URL + "/releases")}>更新日志 ↗</button>
+    </dd>
     <dt>权限</dt><dd>{info?.elevated ? "管理员" : "普通用户"}</dd>
     <dt>配置文件</dt><dd class="mono">{info?.configPath ?? "—"}</dd>
     <dt>状态文件</dt><dd class="mono">{info?.statePath ?? "—"}</dd>
@@ -311,4 +317,5 @@
   .upd-err { color: var(--bad); font-size: 12.5px; margin: 4px 0; line-height: 1.5; }
   .link { background: none; border: none; color: var(--accent); padding: 0; cursor: pointer; font-size: 12.5px; }
   .link:hover { text-decoration: underline; }
+  .repo-link { margin-left: 10px; }
 </style>
