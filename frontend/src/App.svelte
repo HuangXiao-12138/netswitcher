@@ -28,6 +28,7 @@
   let busy = false;
   let maximised = false;
   let updateInfo: UpdateInfo | null = null;
+  let lastUpdateCheck = 0;
   // Upgrade modal lives here (global) so the topbar badge can open it from any
   // page without navigating to Settings first.
   let upgradeModal = false;
@@ -50,6 +51,17 @@
     } finally {
       checking = false;
     }
+  }
+
+  // Re-check for updates when the window regains focus (e.g. reopened from the
+  // tray), throttled to 30 min so we don't hammer GitHub on every focus.
+  function maybeRecheckUpdate() {
+    const now = Date.now();
+    if (now - lastUpdateCheck < 30 * 60 * 1000) return;
+    lastUpdateCheck = now;
+    api.checkUpdate().then((info: UpdateInfo) => {
+      if (info.hasUpdate) updateInfo = info;
+    }).catch(() => {});
   }
 
   async function toggleMax() {
@@ -194,7 +206,13 @@
       updateInfo = info;
     });
     events.on(EVT.updateProgress, onProgress);
-    window.addEventListener("focus", refreshState);
+    // Treat the startup auto-check as the first "check" so the first focus
+    // within 30 min doesn't immediately re-query GitHub.
+    lastUpdateCheck = Date.now();
+    window.addEventListener("focus", () => {
+      refreshState();
+      maybeRecheckUpdate();
+    });
   });
 
   onDestroy(() => {
