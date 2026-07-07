@@ -29,6 +29,7 @@ type Entry struct {
 type Snapshot struct {
 	Entries        []Entry   `json:"entries"`
 	NrptNamespaces []string  `json:"nrptNamespaces,omitempty"` // domain-suffix NRPT rules currently applied
+	MetricManaged  string    `json:"metricManaged,omitempty"`  // interface whose metric we last set (so deactivate restores only it)
 	At             time.Time `json:"at"`
 	Reason         string    `json:"reason,omitempty"`
 }

@@ -10,6 +10,9 @@
   let saving = false;
   let deleting = false;
   let pendingDelete = false;
+  let pendingActivateDirty = false; // 设为活动时有未保存改动 → 弹确认 modal
+  let activating = false; // 设为活动 loading
+  let deactivating = false; // 停用 loading
   let errorText = "";
   let fieldErrors: Record<string, string> = {};
   let advOpen = false;
@@ -43,10 +46,12 @@
 
   async function load() {
     try {
-      const [cfg, st, defaultIf] = await Promise.all([api.getConfig(), api.getStatus(), api.getDefaultRouteInterface().catch(() => "")]);
+      const [cfg, st] = await Promise.all([api.getConfig(), api.getStatus()]);
       config = cfg;
       interfaces = st.interfaces ?? [];
-      systemDefaultIf = defaultIf || "";
+      // getDefaultRouteInterface spawns PowerShell Get-NetRoute (~500ms) —
+      // don't block the page on it; fill systemDefaultIf when it lands.
+      api.getDefaultRouteInterface().then((d) => { systemDefaultIf = d || ""; }).catch(() => {});
       if (!selectedId && cfg.profiles.length) selectedId = cfg.profiles[0].id;
       // Set the working copy directly from the FRESH cfg. Don't call
       // prepareEditing() here: `selected` is a reactive that lags `config=cfg`
@@ -244,20 +249,44 @@
 
   async function setActive() {
     if (!editing) return;
+    // Switching the active profile does NOT save the working copy, so unsaved
+    // edits would be silently dropped. Open a confirm modal first.
+    if (dirty) {
+      pendingActivateDirty = true;
+      return;
+    }
+    await doActivate();
+  }
+
+  async function doActivate() {
+    if (!editing) return;
+    activating = true;
+    errorText = "";
     try {
       await api.setActiveProfile(editing.id);
       await load();
     } catch (e: any) {
       parseError(e);
+    } finally {
+      activating = false;
     }
   }
 
+  async function confirmActivateDirty() {
+    pendingActivateDirty = false;
+    await doActivate();
+  }
+
   async function deactivate() {
+    deactivating = true;
+    errorText = "";
     try {
       await api.deactivateProfile();
       await load();
     } catch (e: any) {
       parseError(e);
+    } finally {
+      deactivating = false;
     }
   }
 
@@ -513,11 +542,11 @@
         <div class="actionbar">
           {#if dirty}<span class="unsaved-pip">有未保存的修改</span>{/if}
           <span class="spacer"></span>
-          <button class="btn primary" on:click={save} disabled={!dirty || saving}>{saving ? "保存中…" : "保存"}</button>
+          <button class="btn primary" on:click={save} disabled={!dirty || saving || activating || deactivating}>{saving ? "保存中…" : "保存"}</button>
           {#if editing.id === activeId}
-            <button class="btn" on:click={deactivate} title="停用此配置，清空活动状态，已下发路由会被移除">停用</button>
+            <button class="btn" on:click={deactivate} disabled={deactivating || activating} title="停用此配置，清空活动状态，已下发路由会被移除">{deactivating ? "停用中…" : "停用"}</button>
           {:else}
-            <button class="btn" on:click={setActive}>设为活动</button>
+            <button class="btn" on:click={setActive} disabled={activating || deactivating || saving}>{activating ? "切换中…" : "设为活动"}</button>
           {/if}
           <span class="divider"></span>
           <button class="btn danger" on:click={deleteProfile} disabled={deleting}>{deleting ? "删除中…" : "删除"}</button>
@@ -543,6 +572,19 @@
       <div class="modal-actions">
         <button class="btn ghost" on:click={() => (pendingDelete = false)} disabled={deleting}>取消</button>
         <button class="btn danger" on:click={confirmDelete} disabled={deleting}>{deleting ? "删除中…" : "确认删除"}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if pendingActivateDirty}
+  <div class="modal-backdrop" on:click={() => (pendingActivateDirty = false)}>
+    <div class="modal" role="dialog" aria-modal="true" on:click|stopPropagation>
+      <h3>有未保存的修改</h3>
+      <p>当前配置 <strong>“{editing?.name}”</strong> 有未保存的修改，切换为活动会丢弃这些改动。</p>
+      <div class="modal-actions">
+        <button class="btn ghost" on:click={() => (pendingActivateDirty = false)} disabled={activating}>取消</button>
+        <button class="btn primary" on:click={confirmActivateDirty} disabled={activating}>{activating ? "切换中…" : "丢弃并切换"}</button>
       </div>
     </div>
   </div>

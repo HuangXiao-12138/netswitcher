@@ -17,26 +17,27 @@ type PowerShellSetter struct {
 	DryRun bool
 }
 
-// Add runs `Add-DnsClientNrptRule -Namespace <ns> -NameServers <ip,ip,...>`.
+// Add runs `Add-DnsClientNrptRule -Namespace <ns> -NameServers <ip>,<ip>,...`.
 func (s *PowerShellSetter) Add(namespace string, nameServers []string) error {
 	if namespace == "" || len(nameServers) == 0 {
 		return nil
 	}
 	cmdText := fmt.Sprintf(
-		"Add-DnsClientNrptRule -Namespace '%s' -NameServers '%s'",
-		namespace, strings.Join(nameServers, ","),
+		"Add-DnsClientNrptRule -Namespace '%s' -NameServers %s",
+		namespace, psNameServers(nameServers),
 	)
 	return s.run(cmdText, "Add", namespace)
 }
 
-// Remove runs `Remove-DnsClientNrptRule -Namespace <ns> -Force`. A missing rule
-// is treated as success (SilentlyContinue).
+// Remove runs `Get-DnsClientNrptRule -Namespace <ns> | Remove-DnsClientNrptRule`.
+// Remove-DnsClientNrptRule has NO -Namespace parameter (only -Name/GUID), so we
+// pipe through Get to delete every rule matching the namespace.
 func (s *PowerShellSetter) Remove(namespace string) error {
 	if namespace == "" {
 		return nil
 	}
 	cmdText := fmt.Sprintf(
-		"Remove-DnsClientNrptRule -Namespace '%s' -Force -ErrorAction SilentlyContinue",
+		"Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object { $_.Namespace -eq '%s' } | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue",
 		namespace,
 	)
 	return s.run(cmdText, "Remove", namespace)
@@ -51,13 +52,18 @@ func (s *PowerShellSetter) Sync(add []Rule, remove []string) error {
 	}
 	var cmds []string
 	for _, ns := range remove {
-		cmds = append(cmds, fmt.Sprintf("Remove-DnsClientNrptRule -Namespace '%s' -Force -ErrorAction SilentlyContinue", ns))
+		// Remove-DnsClientNrptRule has no -Namespace param; pipe via Get.
+		cmds = append(cmds, fmt.Sprintf("Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object { $_.Namespace -eq '%s' } | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue", ns))
 	}
 	for _, r := range add {
 		if r.Namespace == "" || len(r.NameServers) == 0 {
 			continue
 		}
-		cmds = append(cmds, fmt.Sprintf("Add-DnsClientNrptRule -Namespace '%s' -NameServers '%s'", r.Namespace, strings.Join(r.NameServers, ",")))
+		// NRPT allows multiple rules per namespace; clear any existing first so
+		// re-applies don't accumulate duplicates (the old Remove bug left 12
+		// copies of the same rule behind).
+		cmds = append(cmds, fmt.Sprintf("Get-DnsClientNrptRule -ErrorAction SilentlyContinue | Where-Object { $_.Namespace -eq '%s' } | Remove-DnsClientNrptRule -Force -ErrorAction SilentlyContinue", r.Namespace))
+		cmds = append(cmds, fmt.Sprintf("Add-DnsClientNrptRule -Namespace '%s' -NameServers %s", r.Namespace, psNameServers(r.NameServers)))
 	}
 	if len(cmds) == 0 {
 		return nil
@@ -82,4 +88,16 @@ func (s *PowerShellSetter) run(cmdText, op, namespace string) error {
 		return fmt.Errorf("%s-DnsClientNrptRule %s: %s: %w", op, namespace, strings.TrimSpace(string(out)), err)
 	}
 	return nil
+}
+
+// psNameServers formats a name-server list as a PowerShell string array,
+// 'ip1','ip2' — Add-DnsClientNrptRule -NameServers takes String[], NOT a
+// comma-joined single string (the old "'a,b'" made the whole thing one invalid
+// server, which broke resolution with 2+ DNS servers configured).
+func psNameServers(ips []string) string {
+	quoted := make([]string, len(ips))
+	for i, ip := range ips {
+		quoted[i] = fmt.Sprintf("'%s'", ip)
+	}
+	return strings.Join(quoted, ",")
 }

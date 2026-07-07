@@ -114,20 +114,15 @@ func (e *Engine) Apply(profile *config.Profile, snap ifacemgr.Snapshot, reason s
 				res.Removed = append(res.Removed, r)
 			}
 		}
-		// Stop owning interface metrics too: restore every active interface
-		// to automatic metric so our preferred/others values don't linger
-		// after "停用". Without this, deactivating leaves WLAN=10 / others=50
-		// in place even though NetSwitcher is no longer managing routes.
-		if e.metrics != nil {
-			for _, ifc := range snap.Interfaces {
-				if !ifc.IsUp || len(ifc.IPv4) == 0 {
-					continue
-				}
-				if err := e.metrics.SetAutomaticMetric(ifc.Name); err != nil {
-					e.log.Warn("restore automatic metric failed", "iface", ifc.Name, "err", err)
-					continue
-				}
-				res.Metrics = append(res.Metrics, MetricChange{Interface: ifc.Name, NewMetric: -1})
+		// Restore metric only on the interface we were managing (preferred), not
+		// every up interface. applyMetrics only ever sets preferred's metric, so
+		// only that one needs restoring — restoring all spawned one netsh per
+		// interface and made "停用" slow.
+		if e.metrics != nil && prev.MetricManaged != "" {
+			if err := e.metrics.SetAutomaticMetric(prev.MetricManaged); err != nil {
+				e.log.Warn("restore automatic metric failed", "iface", prev.MetricManaged, "err", err)
+			} else {
+				res.Metrics = append(res.Metrics, MetricChange{Interface: prev.MetricManaged, NewMetric: -1})
 			}
 		}
 		// Tear down NRPT rules too — deactivating means we no longer own any
@@ -173,9 +168,16 @@ func (e *Engine) Apply(profile *config.Profile, snap ifacemgr.Snapshot, reason s
 	nrptApplied, nrptChanges := e.applyNrpt(profile, prev.NrptNamespaces)
 	res.Nrpt = nrptChanges
 
+	// Track which interface's metric we own, so a later deactivate restores
+	// only it (not every up interface).
+	metricManaged := ""
+	if len(res.Metrics) > 0 {
+		metricManaged = res.Metrics[0].Interface
+	}
+
 	// Persist the new baseline: (prev - removed) ∪ applied. Failed adds are
 	// NOT included so they retry next pass; failed removes stay in baseline.
-	e.saveState(state.Snapshot{Entries: mergeBaseline(prev.Entries, res.Removed, applied), NrptNamespaces: nrptApplied}, reason, &res)
+	e.saveState(state.Snapshot{Entries: mergeBaseline(prev.Entries, res.Removed, applied), NrptNamespaces: nrptApplied, MetricManaged: metricManaged}, reason, &res)
 
 	res.At = time.Now()
 	e.log.Info("apply done",
