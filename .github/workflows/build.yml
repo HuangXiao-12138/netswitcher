@@ -7,6 +7,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+# To add ARM64 later: add a matrix (include: [{arch: x86_64, runs-on: windows-latest},
+# {arch: arm64, runs-on: windows-11-arm}]) and adjust GOARCH + MinGW per arch.
+# ARM64 needs extra toolchain work (msys2 mingw-w64-clang-aarch64 + WebView2 ARM).
 jobs:
   build:
     runs-on: windows-latest
@@ -22,6 +25,13 @@ jobs:
           node-version: '24'
           cache: 'npm'
           cache-dependency-path: frontend/package-lock.json
+
+      - name: Compute version
+        shell: pwsh
+        run: |
+          # tag → tag name (v1.0.0); branch → branch-runNumber (master-42)
+          $ver = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { "$($env:GITHUB_REF_NAME)-$($env:GITHUB_RUN_NUMBER)" }
+          "VERSION=$ver" >> $env:GITHUB_ENV
 
       - name: Install MinGW-w64 (gcc for CGO)
         shell: pwsh
@@ -46,22 +56,33 @@ jobs:
         run: |
           $env:CGO_ENABLED = "1"
           go build -tags "desktop,production" `
-            -ldflags "-X main.version=$($env:GITHUB_REF_NAME) -H windowsgui" `
+            -ldflags "-X main.version=$($env:VERSION) -H windowsgui" `
             -o build/bin/NetSwitcher.exe ./cmd/netswitcher
 
       - name: Run tests
         shell: pwsh
         run: go test ./...
 
-      - uses: actions/upload-artifact@v4
+      # upload-artifact auto-zips on download, so the artifact name carries the
+      # version + arch suffix — downloaded as NetSwitcher-<version>-x86_64-portable.zip
+      - uses: actions/upload-artifact@v5
         with:
-          name: NetSwitcher-windows
+          name: NetSwitcher-${{ env.VERSION }}-x86_64-portable
           path: build/bin/NetSwitcher.exe
           if-no-files-found: error
+
+      - name: Package release zip
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build/bin/NetSwitcher.exe `
+            -DestinationPath "build/bin/NetSwitcher-$($env:VERSION)-x86_64-Portable.zip"
 
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: build/bin/NetSwitcher.exe
+          files: |
+            build/bin/NetSwitcher-*-x86_64-Portable.zip
+            build/bin/NetSwitcher.exe
           generate_release_notes: true
