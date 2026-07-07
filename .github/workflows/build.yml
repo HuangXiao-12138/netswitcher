@@ -1,0 +1,67 @@
+name: build
+
+on:
+  push:
+    branches: [master]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install MinGW-w64 (gcc for CGO)
+        shell: pwsh
+        run: choco install mingw -y --no-progress
+
+      - name: Download WebView2 bootstrapper (embedded, excluded from repo by .gitignore)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path build/windows | Out-Null
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" `
+            -OutFile "build/windows/MicrosoftEdgeWebview2Setup.exe"
+
+      - name: Build frontend
+        shell: pwsh
+        run: |
+          cd frontend
+          npm install
+          npm run build
+
+      - name: Build NetSwitcher.exe
+        shell: pwsh
+        run: |
+          $env:CGO_ENABLED = "1"
+          go build -tags "desktop,production" `
+            -ldflags "-X main.version=$($env:GITHUB_REF_NAME) -H windowsgui" `
+            -o build/bin/NetSwitcher.exe ./cmd/netswitcher
+
+      - name: Run tests
+        shell: pwsh
+        run: go test ./...
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: NetSwitcher-windows
+          path: build/bin/NetSwitcher.exe
+          if-no-files-found: error
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/bin/NetSwitcher.exe
+          generate_release_notes: true
