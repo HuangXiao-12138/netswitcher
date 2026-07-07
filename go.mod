@@ -46,3 +46,7 @@ require (
 	golang.org/x/sync v0.11.0 // indirect
 	golang.org/x/tools v0.30.0 // indirect
 )
+
+// Patched fork of fyne.io/systray: allow tray callback messages past UIPI
+// when the process runs elevated (otherwise explorer can't click our tray).
+replace fyne.io/systray => ./fork/systray
