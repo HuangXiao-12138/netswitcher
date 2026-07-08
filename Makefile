@@ -6,7 +6,7 @@
 # "v1.2.0-3-gabcdef" / "v1.2.0-dirty" when ahead of a tag) so local builds
 # match CI's semantics — checking for updates then compares against the same
 # scheme GitHub Releases uses. Override with `make build VERSION=v9.9.9`.
-VERSION ?= $(shell git describe --tags --always --dirty 2> /dev/null || echo dev)
+VERSION ?= $(shell git describe --tags --always --dirty 2> /dev/null || echo 0.0.0)
 # -H windowsgui: GUI subsystem (no console window on double-click). CLI
 # subcommands re-attach to the parent console via winutil.AttachParentConsole.
 LDFLAGS := -X main.version=$(VERSION) -H windowsgui

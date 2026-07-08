@@ -87,11 +87,9 @@ func New() *API {
 // OnStartup is called by Wails with the runtime context.
 func (a *API) OnStartup(ctx context.Context) {
 	a.ctx = ctx
-	// Auto-start (--minimized): stay hidden in the tray instead of flashing
-	// the window on login. Double-click still shows the window.
-	if a.Minimized {
-		runtime.WindowHide(ctx)
-	}
+	// (Window hiding on --minimized is handled by Wails' StartHidden option in
+	// gui_cgo.go — runtime.WindowHide here gets overridden by Wails' ShowWindow
+	// which runs AFTER OnStartup.)
 	// File + stdout logging always (so logs work even when non-elevated).
 	logDir, _ := paths.LogDir()
 	_, _ = logging.Configure("info", logDir)

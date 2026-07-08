@@ -13,7 +13,7 @@ param(
 # GitHub Releases uses. Pass -Version X to override.
 if (-not $Version) {
   $Version = (git describe --tags --always --dirty 2>$null)
-  if (-not $Version) { $Version = "dev" }
+  if (-not $Version) { $Version = "0.0.0" }
 }
 
 $ErrorActionPreference = "Stop"

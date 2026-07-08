@@ -72,6 +72,11 @@ func Run(opts Options) error {
 		// custom min/max/close buttons. This removes the native title bar,
 		// so there's no more blank/default window icon in the title bar.
 		Frameless: true,
+		// Auto-start (--minimized): keep the window hidden on login. Wails' own
+		// ShowWindow runs AFTER OnStartup, so a runtime.WindowHide in OnStartup
+		// gets overridden — StartHidden is the supported knob and prevents the
+		// show entirely.
+		StartHidden: opts.Minimized,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},

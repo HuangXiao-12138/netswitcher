@@ -86,4 +86,20 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: build/bin/NetSwitcher-*-x86_64-Portable.zip
-          generate_release_notes: true
+          body: |
+            Windows 内外网路由管理工具 —— 双网卡按网段自动分流 + 域名解析 + 自动更新。
+
+            ## 主要功能
+            - **IP 路由分流**：指定网段(CIDR)走指定网卡（如 168.168.0.0/16 → 以太网），其余走默认网卡；网络变化自动重下发
+            - **默认路由 metric 管理**：让首选网卡（WLAN）赢得默认路由，插有线也不抢
+            - **域名解析规则（NRPT）**：`*.domain` 走指定 DNS（内网域名走内网 DNS，直连快）
+            - **自动更新**：设置页检查 + 一键升级
+            - **系统托盘**：提权运行左右键稳定（已修 UIPI）
+            - **开机自启静默**：登录后只进托盘，不弹窗打扰
+
+            ## 下载
+            `NetSwitcher-v*-x86_64-Portable.zip` —— 解压即用，**需以管理员身份运行**（修改路由表需要）。
+
+            首次运行检测到非提权会弹“以管理员身份重启”；建议设置页开“开机自启”（任务计划最高权限，登录自动提权免 UAC）。
+
+            详细使用见 [README](https://github.com/HuangXiao-12138/netswitcher#readme)。MIT 许可。

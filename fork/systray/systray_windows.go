@@ -38,6 +38,7 @@ var (
 
 	u32                    = windows.NewLazySystemDLL("User32.dll")
 	pChangeWindowMessageFilterEx = u32.NewProc("ChangeWindowMessageFilterEx")
+	pChangeWindowMessageFilter   = u32.NewProc("ChangeWindowMessageFilter")
 	pCreateMenu                  = u32.NewProc("CreateMenu")
 	pCreatePopupMenu       = u32.NewProc("CreatePopupMenu")
 	pCreateWindowEx        = u32.NewProc("CreateWindowExW")
@@ -464,6 +465,13 @@ func (t *winTray) initInstance() error {
 	// to our high-IL window — tray clicks silently die. Explicitly allow these
 	// two messages through the UIPI filter.
 	const MSGFLT_ALLOW = 1
+	// UIPI workaround: when this process runs elevated, explorer.exe (medium
+	// integrity) can't post the tray callback message or TaskbarCreated to
+	// our high-IL window — tray clicks silently die. Allow these messages
+	// through BOTH the process-wide filter (ChangeWindowMessageFilter) and the
+	// per-window filter (Ex): some Windows builds need the global one.
+	pChangeWindowMessageFilter.Call(uintptr(t.wmSystrayMessage), MSGFLT_ALLOW)
+	pChangeWindowMessageFilter.Call(uintptr(t.wmTaskbarCreated), MSGFLT_ALLOW)
 	pChangeWindowMessageFilterEx.Call(uintptr(t.window), uintptr(t.wmSystrayMessage), MSGFLT_ALLOW, 0)
 	pChangeWindowMessageFilterEx.Call(uintptr(t.window), uintptr(t.wmTaskbarCreated), MSGFLT_ALLOW, 0)
 
