@@ -117,6 +117,3 @@ Windows PowerShell：`.\build.ps1`（完整）或 `.\build.ps1 -CliOnly`。
 - 不与 VPN 客户端深度集成（只检测冲突、告警）。
 - 嵌入式架构只在用户登录后维护路由（登录前 / 注销时不工作）。
 
-## 许可
-
-MIT — 随意使用、修改、分发（含商用），保留版权声明即可。详见 [LICENSE](LICENSE)。
